@@ -210,7 +210,7 @@ def run_7za(args, timeout=600):
     kwargs = {}
     if IS_WINDOWS:
         kwargs["creationflags"] = CREATE_NO_WINDOW
-    proc = subprocess.run([sevenzip] + list(args), stdout=subprocess.PIPE,
+    proc = subprocess.run([sevenzip] + list(args), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT, timeout=timeout, **kwargs)
     return proc.returncode, proc.stdout.decode("utf-8", "replace")
 

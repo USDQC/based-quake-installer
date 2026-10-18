@@ -1,7 +1,7 @@
 <div class="titlepage">
 <div class="tp-kicker">User Manual</div>
 <h1 class="tp-title">Based Quake Installer</h1>
-<div class="tp-version">Version 1.6.3</div>
+<div class="tp-version">Version 1.6.4</div>
 <div class="tp-sub">Set up unezQuake and FTE, the Quake shareware data, and ten classic mods in one go, with your name, look and key binds already written.</div>
 <img class="tp-shot" src="img/main-window.png" alt="Based Quake Installer main window">
 <div class="tp-foot">Written for Quake and QuakeWorld players · Windows · Linux<br>Installer by USDQC · Manual date: October 2026</div>
@@ -64,33 +64,26 @@ The two client folders are independent. Nothing is shared between them, so you c
 
 # 2. Getting it running
 
-The installer is written in Python and uses tkinter, the window toolkit that comes with Python, so there's nothing else to install for the program itself. It's released for **Windows** and **Linux**; it always downloads the unezQuake and FTE builds for the system it's running on. Pick yours below.
+On Windows the installer is a single program file with everything built in, so **you don't need Python or anything else**. On Linux it's a small Python program (tkinter) that the `.deb` sets up for you. Either way it always downloads the unezQuake and FTE builds for the system it's running on. Get the files from the **Releases** page: <https://github.com/USDQC/based-quake-installer/releases>.
 
 ## 2.1 Windows 10 / 11
 
-1. Install **64-bit Python 3.8 or newer** from <https://www.python.org/downloads/windows/> (3.12 is a good choice). On the installer's options page, keep **"tcl/tk and IDLE"** ticked. That's what provides tkinter.
-2. Unzip the installer package (`based-quake-installer.zip`) somewhere handy. Keep the whole folder together, including `tools\7za.exe`.
-3. Start it one of two ways:
-    - Double-click **`run_installer.bat`**. It starts the program with `pyw`/`pythonw`, so no black console window hangs around.
-    - Or open a Command Prompt in that folder and type `python installer_gui.py`.
+1. Download **`BasedQuakeInstaller-windows-x64.zip`** from the latest release.
+2. Unzip it anywhere you like (right-click → **Extract All…**). Inside are `BasedQuakeInstaller.exe`, the README, the licence and the 7-Zip licence note.
+3. **Double-click `BasedQuakeInstaller.exe`.** That's it: no Python, no setup.
 
-You don't need administrator rights unless you choose a protected folder (such as somewhere under `C:\Program Files`).
+<div class="note"><b>"Windows protected your PC"?</b> The exe isn't code-signed, so Microsoft Defender SmartScreen may show this the first time. Click <b>More info</b>, then <b>Run anyway</b>. The program is built from the public source by GitHub Actions; each release lists the build run.</div>
 
-**Optional: make a stand-alone .exe.** If you'd like a program you can hand to a friend who doesn't have Python, run `build_exe.bat` in the same folder (on a Windows 10/11 x64 PC with Python installed). It installs PyInstaller and builds:
+The program can live anywhere, even in `C:\Program Files`: it never writes next to itself. Your settings go to `%APPDATA%\BasedQuakeInstaller\settings.json`, and the games go wherever you choose (default `C:\Games`). You don't need administrator rights unless you install the *games* into a protected folder.
 
-| Command | Result |
-|---|---|
-| `build_exe.bat` | `dist\Based-Quake-Installer\Based-Quake-Installer.exe` (folder build, recommended; ship the whole folder) |
-| `build_exe.bat onefile` | `dist\Based-Quake-Installer.exe` (single file) |
-
-The built exe isn't signed, so Windows SmartScreen may say "Windows protected your PC". Click **More info → Run anyway**.
+The exe takes a few seconds to open, because it unpacks itself to a temporary folder first. If your antivirus is suspicious of it, you can run the same program from source instead: download **`based-quake-installer-source-windows.zip`**, install 64-bit Python 3.8+ from <https://www.python.org/downloads/windows/> (keep **"tcl/tk and IDLE"** ticked), unzip, and double-click `run_installer.bat`. `build_exe.bat` in that zip builds the same exe yourself (it uses PyInstaller): `dist\BasedQuakeInstaller.exe`, plus `dist\BasedQuakeInstaller-cli.exe` for the command line (Chapter 9).
 
 ## 2.2 Linux: Debian, Ubuntu, Pop!_OS, Mint
 
 The easy way is the `.deb` package. Open a terminal in the folder where you downloaded it and run:
 
 ```
-sudo apt install ./based-quake-installer_1.6.3_all.deb
+sudo apt install ./based-quake-installer_1.6.4_all.deb
 ```
 
 This pulls in `python3` and `python3-tk` automatically and adds a **Based Quake Installer** entry to your applications menu. You can also start it from a terminal with `based-quake-installer`. The program itself lives in `/opt/based-quake-installer`.
@@ -115,7 +108,7 @@ You can change it in the window before you click Install.
 
 # 3. A tour of the window
 
-![The main window (v1.6.3, Custom binds tab with the Default preset filled in on first run).](img/main-window.png)
+![The main window (Custom binds tab with the Default preset filled in on first run).](img/main-window.png)
 
 The window is laid out from top to bottom in the order you'll use it: where to install, who you are and how it should look, your keys, and then the buttons and progress area. On the right, a panel lists the mods that come along.
 
@@ -199,7 +192,7 @@ Aliases are accepted too: `CONTROL` → `CTRL`, `ESC` → `ESCAPE`, `RETURN` →
 
 ## 3.4 Binds: the Mod binds tab
 
-![Mod binds tab with Team Fortress selected (v1.6.3).](img/mod-binds-tf.png)
+![Mod binds tab with Team Fortress selected.](img/mod-binds-tf.png)
 
 Many mods add their own commands, such as throwing grenades in Team Fortress or firing the grappling hook in CTF. The **Mod binds** tab has a **Mod:** drop-down at the top to pick the mod, and a scrollable page of boxes for it: Team Fortress, Thunderwalker CTF, Rocket Arena, PainKeep, AirQuake (FTE), Quake Rally (FTE), Get Rich Quake and Rune Quake. The full list of what each mod offers is in Chapter 4.
 
@@ -210,7 +203,7 @@ Many mods add their own commands, such as throwing grenades in Team Fortress or 
 
 Headhunters and Future vs Fantasy don't have tabs: Headhunters' docs don't list any bindable commands, and Future vs Fantasy's readme literally says "No Impulses to Bind". Your normal weapon keys cover them.
 
-![Mod binds tab with Rune Quake selected (v1.6.3).](img/mod-binds-rune.png)
+![Mod binds tab with Rune Quake selected.](img/mod-binds-rune.png)
 
 ## 3.5 Included mods panel
 
@@ -485,7 +478,7 @@ A source only counts when it is ticked, so the installer also adds `sb_sourcemar
 
 # 7. Checking for updates
 
-![The "Check for updates" result window (v1.6.3).](img/update-check.png)
+![The "Check for updates" result window.](img/update-check.png)
 
 Click **Check for updates** on an existing install. The installer reads its record of what it installed (`based-quake-manifest.json` in your install folder) and compares it with what's online:
 
@@ -560,7 +553,7 @@ Click **Update configs only**. It gives every mod folder an `autoexec.cfg` that 
 
 # 9. Command-line options
 
-For scripting or headless use, `installer_cli.py` does the same job without the window. Run it from the installer folder, e.g. `python installer_cli.py --root "C:\Games" --name Ranger --preset vanilla --look gl`.
+For scripting or headless use, `installer_cli.py` (or `BasedQuakeInstaller-cli.exe`, if you built it with `build_exe.bat`) does the same job without the window. `--version` prints the version and `--self-test` checks that the program and its bundled tools start. Run it from the installer folder, e.g. `python installer_cli.py --root "C:\Games" --name Ranger --preset vanilla --look gl`.
 
 | Option | Meaning | Default |
 |---|---|---|

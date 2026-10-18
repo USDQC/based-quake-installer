@@ -1,0 +1,102 @@
+name: Windows exe
+
+# Builds the standalone BasedQuakeInstaller.exe (PyInstaller, one file, windowed) and
+# attaches BasedQuakeInstaller-windows-x64.zip to the release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and upload to (e.g. v1.6.4)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-exe-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      ZIP: BasedQuakeInstaller-windows-x64.zip
+      BQI_PYTHON: python
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Check the tag matches the version
+        run: |
+          $ver = python -c "import quake_installer as q; print(q.__version__)"
+          Write-Host "tag $env:TAG, package version $ver"
+          if ("v$ver" -ne $env:TAG) { throw "tag $env:TAG does not match __version__ $ver" }
+
+      - name: Run the tests
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q tests -p no:cacheprovider
+
+      - name: Build the exe (build_exe.bat, pinned PyInstaller)
+        shell: cmd
+        run: call build_exe.bat
+
+      - name: Smoke-test the built exes
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-ChildItem dist | Format-Table Name, Length
+          $before = (Get-ChildItem dist -Recurse | Measure-Object).Count
+
+          # Console build: --version and --self-test (7za from _MEIPASS, settings dir, GUI imports).
+          & .\dist\BasedQuakeInstaller-cli.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "cli --version failed ($LASTEXITCODE)" }
+          & .\dist\BasedQuakeInstaller-cli.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "cli --self-test failed ($LASTEXITCODE)" }
+
+          # The shipped windowed exe: --self-test opens/closes a hidden Tk window, runs 7za, etc.
+          $report = Join-Path $env:RUNNER_TEMP "gui-selftest.json"
+          $p = Start-Process -FilePath .\dist\BasedQuakeInstaller.exe -ArgumentList "--self-test", "`"$report`"" -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report } else { Write-Host "no report written" }
+          if ($p.ExitCode -ne 0) { throw "BasedQuakeInstaller.exe --self-test exit code $($p.ExitCode)" }
+
+          # Nothing may be written next to the exe.
+          $after = (Get-ChildItem dist -Recurse | Measure-Object).Count
+          if ($after -ne $before) { Get-ChildItem dist -Recurse; throw "files appeared next to the exe" }
+
+      - name: Package the zip
+        run: |
+          $ErrorActionPreference = "Stop"
+          $stage = Join-Path $env:RUNNER_TEMP "BasedQuakeInstaller"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item dist\BasedQuakeInstaller.exe, README.md, LICENSE, tools\7za-license.txt $stage
+          Compress-Archive -Path "$stage\*" -DestinationPath $env:ZIP -CompressionLevel Optimal -Force
+          Get-Item $env:ZIP, dist\BasedQuakeInstaller.exe | Format-Table Name, Length
+          Get-FileHash $env:ZIP, dist\BasedQuakeInstaller.exe -Algorithm SHA256 | Format-Table Hash, Path
+
+      - name: Keep the build as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasedQuakeInstaller-windows-x64-${{ env.TAG }}
+          path: ${{ env.ZIP }}
+          retention-days: 30
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload $env:TAG $env:ZIP --clobber --repo $env:GITHUB_REPOSITORY

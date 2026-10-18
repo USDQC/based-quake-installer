@@ -14,7 +14,7 @@ stage() {  # stage <dir> [extra files...]
 }
 # Windows (flat tree)
 stage "$T/win" tools build_exe.bat run_installer.bat requirements-build.txt
-rm -f "$OUT/based-quake-installer.zip"; (cd "$T/win" && zip -qr "$OUT/based-quake-installer.zip" .)
+rm -f "$OUT/based-quake-installer-source-windows.zip"; (cd "$T/win" && zip -qr "$OUT/based-quake-installer-source-windows.zip" .)
 
 # Linux launcher
 LAUNCH='#!/bin/sh
@@ -83,5 +83,5 @@ L="$T/lin/based-quake-installer"; stage "$L"
 printf '%s\n' "$LAUNCH" > "$L/run_installer.sh"; chmod 755 "$L/run_installer.sh"
 tar -C "$T/lin" -czf "$OUT/based-quake-installer-linux.tar.gz" based-quake-installer
 rm -rf "$T"
-ls -l "$OUT/based-quake-installer.zip" "$DEB" \
+ls -l "$OUT/based-quake-installer-source-windows.zip" "$DEB" \
       "$OUT/based-quake-installer-linux.tar.gz"

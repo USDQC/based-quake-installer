@@ -7,7 +7,7 @@ Example:
 import argparse
 import sys
 
-from quake_installer import cfg
+from quake_installer import __version__, cfg
 from quake_installer.constants import DEFAULT_ROOT, host_platform
 from quake_installer.installer import InstallError, Options, run_install
 from quake_installer.mods import load_specs
@@ -16,6 +16,9 @@ from quake_installer.mods import load_specs
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Based Quake Installer (no GUI). Installs engines + all mods together.")
+    ap.add_argument("--version", action="version", version="Based Quake Installer %s" % __version__)
+    ap.add_argument("--self-test", action="store_true",
+                    help="check that the program and its bundled tools start, then exit")
     ap.add_argument("--root", default=DEFAULT_ROOT)
     ap.add_argument("--name", default="player")
     ap.add_argument("--preset", choices=("none", "vanilla", "wasd", "modern"), default="vanilla",
@@ -40,6 +43,9 @@ def main(argv=None):
     ap.add_argument("--update", action="store_true",
                     help="check, then install only out-of-date clients/mods")
     a = ap.parse_args(argv)
+    if a.self_test:
+        from quake_installer import selftest
+        return selftest.run(gui=False)
     keys = [m["key"] for m in load_specs()]
     if a.mods.strip().lower() in ("", "all"):
         mods = keys

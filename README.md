@@ -12,7 +12,8 @@ A one-click installer that sets up a complete, ready-to-play **QuakeWorld** setu
 - a working **server browser** list for unezQuake,
 - and a **Check for updates** button that keeps it all current.
 
-It's written in Python 3 with the standard library's tkinter, so no third-party packages are needed.
+On Windows it's a single standalone `.exe`, so **no Python needed**. It's written in Python 3 with the standard
+library's tkinter, and the exe is built from this repo by GitHub Actions.
 It's an installer only: it doesn't launch games, create `.bat` files or shortcuts, or use Slipgate or other
 launchers. When it finishes, you start `unezquake.exe` or `fteqw64.exe` yourself and pick a mod with `-game`.
 
@@ -63,25 +64,31 @@ Get the latest version from the **[Releases page](https://github.com/USDQC/based
 
 | File | For |
 |---|---|
-| `based-quake-installer.zip` | Windows 10/11 x64 (needs Python 3.8+, see below) |
+| **`BasedQuakeInstaller-windows-x64.zip`** | **Windows 10/11 x64**: standalone `BasedQuakeInstaller.exe`, no Python needed |
 | `based-quake-installer_<version>_all.deb` | Debian / Ubuntu / Pop!_OS / Mint |
 | `based-quake-installer-linux.tar.gz` | other Linux x64 (run from the folder) |
 | `Based-Quake-Installer-Manual.pdf` | the full user manual |
+| `based-quake-installer-source-windows.zip` | Windows, run from source with your own Python 3.8+ (`run_installer.bat`) |
 
 ## Install
 
 ### Windows 10 / 11 (x64)
 
-1. Install **64-bit Python 3.8 or newer** from <https://www.python.org/downloads/windows/>. Keep
-   **"tcl/tk and IDLE"** ticked (that's tkinter).
-2. Unzip `based-quake-installer.zip` anywhere (keep the `tools` folder next to the scripts).
-3. Double-click **`run_installer.bat`**.
+1. Download **`BasedQuakeInstaller-windows-x64.zip`** from the [latest release](https://github.com/USDQC/based-quake-installer/releases/latest)
+   and unzip it.
+2. **Double-click `BasedQuakeInstaller.exe`.** No Python or anything else needed.
+3. The exe isn't code-signed, so SmartScreen may say *"Windows protected your PC"*. Click **More info → Run anyway**.
 4. Pick an install folder (default `C:\Games`), enter your name, choose your binds and look, and click **Install**.
+
+The exe never writes next to itself, so it can live anywhere (even `C:\Program Files`). Settings are kept in
+`%APPDATA%\BasedQuakeInstaller\settings.json`. To run from source instead, use
+`based-quake-installer-source-windows.zip` with 64-bit Python 3.8+ (keep "tcl/tk and IDLE" ticked) and
+double-click `run_installer.bat`.
 
 ### Debian / Ubuntu / Pop!_OS / Mint
 
 ```bash
-sudo apt install ./based-quake-installer_1.6.3_all.deb   # depends on python3, python3-tk
+sudo apt install ./based-quake-installer_1.6.4_all.deb   # depends on python3, python3-tk
 based-quake-installer                                     # or "Based Quake Installer" in the app menu
 ```
 
@@ -109,6 +116,7 @@ Command-line installs use the same engine:
 ```bash
 python3 installer_cli.py --root ~/Games --name Ranger --preset wasd --look gl
 python3 installer_cli.py --root ~/Games --check-updates
+python3 installer_cli.py --version             # or --self-test
 python3 installer_cli.py --root ~/Games --update
 python3 installer_cli.py --root ~/Games --mods fortress,ctf --mods-only
 python3 installer_cli.py --root ~/Games --mods fortress --mods-only --mod-file fortress=~/Downloads/fortress.zip
@@ -133,9 +141,13 @@ python3 -m pytest -q tests
   OUT=dist bash packaging/build_packages.sh
   ```
 
-- **Windows .exe** (optional, on Windows with the Python above): `build_exe.bat` (onedir) or
-  `build_exe.bat onefile`. This uses PyInstaller from `requirements-build.txt`. The exe is unsigned, so
-  SmartScreen may warn ("More info → Run anyway").
+- **Windows .exe**: `build_exe.bat` on Windows with 64-bit Python 3.8+ builds `dist\BasedQuakeInstaller.exe`
+  (one file, windowed) and `dist\BasedQuakeInstaller-cli.exe`, using the PyInstaller version pinned in
+  `requirements-build.txt`. `tools\7za.exe` is bundled and found through `sys._MEIPASS`.
+  `BasedQuakeInstaller-cli.exe --self-test` checks a build. The
+  [`windows-exe` workflow](.github/workflows/windows-exe.yml) runs the same script on `windows-latest`
+  for every published release (or by hand with a tag), runs the tests and self-tests, and uploads
+  `BasedQuakeInstaller-windows-x64.zip` to the release.
 - **Mod zips for Google Drive**: `packaging/drive/build_drive_zips.py <staged gamedirs> <out>` builds one
   `<gamedir>.zip` per mod plus `mods.json` (sizes and sha256). See `packaging/drive/` for the upload steps.
 - **Manual**: `manual/Based-Quake-Installer-Manual.md` → PDF with `manual/build_pdf.py` (needs `markdown`
@@ -164,7 +176,8 @@ run_installer.bat / build_exe.bat     Windows launcher and PyInstaller build
 quake_installer/                      the engine: downloads (incl. Google Drive), extraction, LH5 decoder,
                                       clients, mods, configs and binds, sources.txt, manifest, updater, GUI
 tests/                                pytest suite
-packaging/                            build_packages.sh (zip/.deb/tar.gz) and drive/ (mod zip builder)
+packaging/                            build_packages.sh (source zip/.deb/tar.gz) and drive/ (mod zip builder)
+.github/workflows/windows-exe.yml     builds and uploads the Windows exe for each release
 manual/                               user manual source, screenshots and PDF builder
 tools/7za.exe                         7-Zip 9.20 command-line (Windows), see below
 ```
@@ -195,7 +208,7 @@ SPDX-License-Identifier: `GPL-3.0-or-later`
 
 - `tools/7za.exe` is the unmodified **7-Zip 9.20** command-line build by Igor Pavlov, licensed under the
   **GNU LGPL 2.1 or later** (see `tools/7za-license.txt`). It runs as a separate program and is used only to
-  unpack the shareware archive on Windows. Source code: <https://www.7-zip.org/> (`7z920.tar.bz2`, also at
+  unpack the shareware archive on Windows; the Windows exe has it built in. Source code: <https://www.7-zip.org/> (`7z920.tar.bz2`, also at
   <https://sourceforge.net/projects/sevenzip/files/7-Zip/9.20/>).
 - unezQuake, FTE, the Quake shareware data and the mods are **not** part of this repository or its packages.
   They are downloaded at install time and keep their own licences.
