@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy to mods.json next to installer_gui.py / the .exe to override the Drive index without rebuilding. Same format as the mods.json on Google Drive; entries match quake_installer/mods.py keys.",
+  "format": 1,
+  "mods": [
+    {
+      "key": "fortress",
+      "gamedir": "fortress",
+      "file": "fortress.zip",
+      "version": "2.8+2.9qw",
+      "sha256": "8e4118ddaa7f9178cb3b3255ac2df33c590d35c2f093ecca1756b9bfa3b1a3e7",
+      "size": 4169491,
+      "clients": ["fte", "unez"],
+      "url": "https://drive.google.com/file/d/PASTE_FILE_ID/view?usp=sharing"
+    }
+  ]
+}

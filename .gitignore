@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.testenv/
+*.egg-info/
+
+# Build outputs
+dist/
+build/
+*.spec
+*.deb
+*.tar.gz
+/based-quake-installer.zip
+manual/*.html
+manual/*.pdf
+*.pdf
+
+# Google Drive upload set (built by packaging/drive/build_drive_zips.py; lives on Drive, not in git)
+drive-upload/
+packaging/drive/out/
+*.zip
+
+# Local test installs, logs, user mod drops
+Quake/
+Games/
+*.log
+mods/*
+!mods/README.txt
+mods.json
+settings.json
+based-quake-manifest.json
+tests/data/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

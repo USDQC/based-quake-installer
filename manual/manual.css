@@ -1,0 +1,45 @@
+@page { size: A4; margin: 20mm 18mm 20mm 18mm;
+  @bottom-center { content: counter(page); font: 9pt "DejaVu Sans", sans-serif; color: #777; }
+  @top-right { content: "Based Quake Installer v1.6.3 · User Manual"; font: 8pt "DejaVu Sans", sans-serif; color: #999; } }
+@page :first { @bottom-center { content: none; } @top-right { content: none; } }
+@page toc { @bottom-center { content: none; } }
+body { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; font-size: 10pt; line-height: 1.45; color: #222; }
+h1, h2, h3 { font-family: "DejaVu Sans", sans-serif; color: #5a2a0c; }
+h1.chapter { page-break-before: always; font-size: 20pt; border-bottom: 3px solid #8b3a0f; padding-bottom: 4px; margin-top: 0; }
+h2 { font-size: 13.5pt; margin-top: 18pt; border-bottom: 1px solid #e3cbb6; padding-bottom: 2px; }
+h1, h2 { page-break-after: avoid; }
+p { margin: 5pt 0 7pt; }
+a { color: #8b3a0f; text-decoration: none; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.6pt; background: #f4efe9; padding: 0 2px; border-radius: 2px; }
+pre { background: #f6f2ed; border: 1px solid #e3d6c8; border-left: 4px solid #8b3a0f; padding: 7pt 9pt; font-size: 8.3pt; line-height: 1.35; page-break-inside: avoid; white-space: pre-wrap; }
+pre code { background: none; padding: 0; font-size: 8.3pt; }
+table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; font-size: 9pt; page-break-inside: avoid; }
+tr { page-break-inside: avoid; }
+th { background: #8b3a0f; color: white; text-align: left; padding: 4pt 6pt; font-weight: bold; }
+td { border-bottom: 1px solid #e6dcd2; padding: 3.5pt 6pt; vertical-align: top; }
+tr:nth-child(even) td { background: #faf6f2; }
+figure { margin: 10pt 0 12pt; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 100%; max-height: 135mm; border: 1px solid #bbb; box-shadow: 0 1px 3px #aaa; }
+figcaption { font-size: 8.5pt; color: #666; font-style: italic; margin-top: 4pt; }
+.note, .warn { padding: 7pt 10pt; margin: 9pt 0; border-radius: 3px; page-break-inside: avoid; font-size: 9.5pt; }
+.note { background: #eef5fb; border-left: 4px solid #3a78b5; }
+.warn { background: #fff6e0; border-left: 4px solid #d99a00; }
+.endnote { margin-top: 24pt; font-size: 8pt; color: #777; border-top: 1px solid #ddd; padding-top: 6pt; }
+ul, ol { margin: 4pt 0 8pt; padding-left: 18pt; } li { margin: 2pt 0; }
+/* title page */
+.titlepage { text-align: center; page-break-after: always; padding-top: 18mm; }
+.tp-kicker { font-size: 12pt; letter-spacing: 4px; text-transform: uppercase; color: #8b3a0f; }
+.tp-title { font-size: 34pt; margin: 6pt 0 2pt; color: #3d1a06; border: none; }
+.tp-version { font-size: 15pt; color: #8b3a0f; margin-bottom: 12pt; }
+.tp-sub { font-size: 11pt; color: #444; max-width: 140mm; margin: 0 auto 14pt; }
+.tp-shot { width: 150mm; border: 1px solid #aaa; box-shadow: 0 2px 6px #999; }
+.tp-foot { margin-top: 16pt; font-size: 9pt; color: #777; }
+/* toc */
+.toc-page { page: toc; page-break-after: always; }
+.toc-heading { font-size: 20pt; border-bottom: 3px solid #8b3a0f; color: #5a2a0c; }
+ul.toc { list-style: none; padding-left: 0; }
+ul.toc li { margin: 3pt 0; }
+ul.toc li.toc1 { font-weight: bold; margin-top: 9pt; font-size: 11pt; }
+ul.toc li.toc2 { padding-left: 16pt; font-size: 9.8pt; }
+ul.toc a { color: #222; }
+ul.toc a::after { content: leader('.') target-counter(attr(href), page); color: #555; }

@@ -1,0 +1,4 @@
+# Runtime: none. The installer uses only the Python standard library
+# (tkinter, urllib, zipfile, hashlib, subprocess, threading).
+#
+# Build-time only (to make an .exe):  see requirements-build.txt
