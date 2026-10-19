@@ -311,6 +311,8 @@ These are the actions offered on each **Mod binds** tab. All of them come from t
 
 | Action | Quake command |
 |---|---|
+| Quick airfist (fire, switch back) | `+bqi_airfist` = `impulse 47; +attack`, release `-attack; impulse 69` |
+| Quick hook (hold, switch back) | `+bqi_hook` = `impulse 22; +attack`, release `-attack; impulse 69` |
 | Grappling harpoon | `impulse 22` |
 | Throw ammo backpack | `impulse 20` |
 | Throw current weapon | `impulse 21` |
@@ -337,6 +339,11 @@ These are the actions offered on each **Mod binds** tab. All of them come from t
 
 | Action | Quake command |
 |---|---|
+| Quick AirFist (fire, switch back) | `+bqi_airfist` = `impulse 30; +attack`, release `-attack; impulse 69` |
+| Quick Gravity Well (drop, back) | `+bqi_gravitywell` = `impulse 33; +attack`, release `-attack; impulse 69` |
+| Quick bear trap (drop, back) | `+bqi_beartrap` = `impulse 34; …` (same pattern) |
+| Quick AutoSentry (drop, back) | `+bqi_autosentry` = `impulse 35; …` (same pattern) |
+| Quick Pork & Beans (use, back) | `+bqi_beans` = `impulse 36; …` (same pattern) |
 | Grapple / harpoon | `impulse 21` |
 | AirFist | `impulse 30` |
 | Chain lightning | `impulse 32` |
@@ -347,6 +354,11 @@ These are the actions offered on each **Mod binds** tab. All of them come from t
 | Inventory stats | `impulse 38` |
 | Release harpoon | `impulse 50` |
 | Previous weapon | `impulse 69` |
+
+**Quick rows.** Hold the key: the item is selected and fires. Let go: you're back on the weapon you had, using the mod's own previous-weapon impulse (69). The alias lines are written to `binds.cfg` only for rows you fill in. Notes:
+
+- If you don't have the item (PainKeep AirFist and items are pickups outside deathmatch 4/5; a Thunderwalker server can turn the hook off), the key fires your current weapon and release switches to your previous one.
+- PainKeep items: tap the key. Holding it keeps dropping one every half second. Using your **last** one makes PainKeep switch to your best weapon, and you stay there.
 
 **AirQuake** (`airquake`, FTE only)
 

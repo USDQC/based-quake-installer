@@ -31,6 +31,8 @@ MOD_BIND_ACTIONS = {
     ],
     # Thunderwalker CTF / ThreeWave — twdocs/impulses.htm + Threewave wiki
     "thunderwalker": [
+        ("q_airfist", "+bqi_airfist", "Quick airfist (fire, switch back)"),
+        ("q_hook", "+bqi_hook", "Quick hook (hold, switch back)"),
         ("hook", "impulse 22", "Grappling harpoon"),
         ("throwammo", "impulse 20", "Throw ammo backpack"),
         ("throwweapon", "impulse 21", "Throw current weapon"),
@@ -53,6 +55,11 @@ MOD_BIND_ACTIONS = {
     ],
     # PainKeep — IMPULSES.TXT (optional direct selects; 1–8 still work via vanilla)
     "painkeep": [
+        ("q_airfist", "+bqi_airfist", "Quick AirFist (fire, switch back)"),
+        ("q_gravitywell", "+bqi_gravitywell", "Quick Gravity Well (drop, back)"),
+        ("q_beartrap", "+bqi_beartrap", "Quick bear trap (drop, back)"),
+        ("q_autosentry", "+bqi_autosentry", "Quick AutoSentry (drop, back)"),
+        ("q_beans", "+bqi_beans", "Quick Pork & Beans (use, back)"),
         ("grapple", "impulse 21", "Grapple / harpoon"),
         ("airfist", "impulse 30", "AirFist"),
         ("chainlg", "impulse 32", "Chain lightning"),
@@ -112,6 +119,45 @@ MOD_BIND_ACTIONS = {
     ],
 }
 
+# Quick-use aliases: press = select the item and hold fire, release = stop firing and
+# go back with the mod's own "previous weapon" impulse (69). The select impulse and
+# +attack go out in the same client frame; the server runs ImpulseCommands before
+# W_Attack in W_WeaponFrame, so the new weapon fires at once (no wait needed). The
+# release impulse waits on the server until the shot's attack_finished has passed.
+#
+# PainKeep 1.11 (pk111src qwsrc): impulses 30/33/34/35/36 in pk_ChangeWeapon
+# (weapons.qc:1851-1905), 69 = lastweapon (weapons.qc:2450-2459, tracked in
+# W_SetCurrentAmmo weapons.qc:1285-1291), W_WeaponFrame weapons.qc:2581-2602.
+# Thunderwalker 3.01 (tw301qsv twqwsrc): 47 = AirFist (defs.qc:810, weapons.qc:1527),
+# 22 = grapple (weapons.qc:1479), 69 = PreviousWeaponCommand (weapons.qc:1849,1942);
+# the hook drops when fire is released (grapple.qc:375-379) in PlayerPreThink
+# (client.qc:1156), before the 69 runs in W_WeaponFrame (client.qc:1358).
+_PREV = "impulse 69"
+QUICK_ALIASES = {
+    "painkeep": {
+        "q_airfist": ("bqi_airfist", "impulse 30"),
+        "q_gravitywell": ("bqi_gravitywell", "impulse 33"),
+        "q_beartrap": ("bqi_beartrap", "impulse 34"),
+        "q_autosentry": ("bqi_autosentry", "impulse 35"),
+        "q_beans": ("bqi_beans", "impulse 36"),
+    },
+    "thunderwalker": {
+        "q_airfist": ("bqi_airfist", "impulse 47"),
+        "q_hook": ("bqi_hook", "impulse 22"),
+    },
+}
+
+
+def quick_alias_lines(mod_key, action_id):
+    """The two alias lines for one quick-use action, or [] if it isn't one."""
+    entry = (QUICK_ALIASES.get(mod_key) or {}).get(action_id)
+    if not entry:
+        return []
+    name, select = entry
+    return ['alias +%s "%s; +attack"' % (name, select),
+            'alias -%s "-attack; %s"' % (name, _PREV)]
+
+
 # Mods researched with no useful extra bind UI (vanilla weapons enough / no impulses)
 MOD_BIND_SKIP = {
     "hh": "Client pak readme documents Grapple Gun but no impulse/bind table in archive.",
@@ -168,6 +214,7 @@ def render_mod_binds_cfg(mod_key, binds, title=None):
         lines.append("")
         return "\r\n".join(lines)
     seen = set()
+    aliases, binds = [], []
     for action_id, cmd, _label in actions_for(mod_key):
         if action_id not in cleaned:
             continue
@@ -176,7 +223,13 @@ def render_mod_binds_cfg(mod_key, binds, title=None):
         if kl in seen:
             continue
         seen.add(kl)
-        lines.append(cfg._fmt_bind(key, cmd))
+        aliases.extend(quick_alias_lines(mod_key, action_id))
+        binds.append(cfg._fmt_bind(key, cmd))
+    if aliases:
+        lines.append("// Quick use: hold to select and fire, release to go back (impulse 69)")
+        lines.extend(aliases)
+        lines.append("")
+    lines.extend(binds)
     lines.append("")
     return "\r\n".join(lines)
 

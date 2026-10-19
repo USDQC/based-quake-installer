@@ -12,4 +12,9 @@ Extra bind boxes per mod, taken from each mod's own docs or configs. Saved to `<
 - **Rune Quake** (player commands docs, bindings.qc): `impulse 100`, `impulse 98`, `impulse 99`, `impulse 96`, `impulse 95`, `impulse 92`, `impulse 86`, `+hook`, `impulse 97`, `impulse 201`
 - **Headhunters**, **Future vs Fantasy**: none (no documented binds).
 
+Quick-use aliases (switch, fire while held, `impulse 69` back), checked in the QuakeC:
+
+- **PainKeep** 1.11 (`pk111src.zip`, qwsrc): `pk_ChangeWeapon` impulses 30/33/34/35/36 (weapons.qc:1851-1905); 69 restores `lastweapon`/`pklastweapon` (weapons.qc:2450-2459), set in `W_SetCurrentAmmo` (weapons.qc:1285-1291); `W_WeaponFrame` runs impulses before `W_Attack` (weapons.qc:2581-2602). Grapple not offered: its harpoon stays out (fire again to reel in, impulse 50 to release).
+- **Thunderwalker** 3.01 (`tw301qsv.zip`, twqwsrc): AirFist 47 (defs.qc:810, weapons.qc:1527), grapple 22 (weapons.qc:1479), 69 = `PreviousWeaponCommand` (weapons.qc:1849, 1942). Hook drops on release (grapple.qc:375-379) in PlayerPreThink (client.qc:1156), before `W_WeaponFrame` (client.qc:1358).
+
 Tab conflicts (checked v1.6.5): no mod binds Tab to anything but `+showscores`. FTE's own `fte/default.cfg` has `+showteamscores`; the installer's `unbindall` + `bind TAB +showscores` replaces it.
