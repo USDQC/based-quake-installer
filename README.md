@@ -9,6 +9,7 @@ Installs unezQuake and FTE with a set of classic QuakeWorld mods, binds already 
 - Key binds for every client and mod: click a box, press a key
 - Server browser list for unezQuake
 - Check for updates
+- Updates itself (Update installer)
 - Windows 10/11 x64 and Debian-based Linux
 
 ## Download

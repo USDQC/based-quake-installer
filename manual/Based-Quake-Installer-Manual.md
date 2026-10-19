@@ -220,6 +220,7 @@ The panel on the right just shows the mods that will be installed. There are no 
 | **Install** | The full job: downloads both clients, the shareware data and all mods, then writes all config files and FTE's `default.fmf`. It's safe to run again on an existing install. |
 | **Update configs only** | Downloads nothing. It rewrites `id1/based.cfg` and the `autoexec.cfg` files (name, look, binds), every mod folder's `autoexec.cfg` and `binds.cfg`, and checks `default.fmf`. Use it after changing your keys or name. You need a finished install first. |
 | **Check for updates** | Looks online for newer client builds or changed mods (via `mods.json` on Google Drive) and shows a list. From that list, **Update** downloads only what changed. See Chapter 7. |
+| **Update installer** | Checks for a newer version of this installer program and offers to update it. Games, mods and configs aren't touched. See 7.1. |
 | **Cancel** | Stops a running install or update. It's only active while something is running. |
 | **Open folder** | Opens your install folder in Explorer or your file manager. |
 
@@ -515,6 +516,17 @@ If anything needs updating, the **Update N** button downloads and installs **onl
 **The manifest file.** `based-quake-manifest.json` is written by every Install and Update. It records the system it was installed for (`windows` or `linux`), plus, for each client and mod, the version, URL, size, sha256 (mods), ETag and date, and when it was installed. You don't need to edit it. If you delete it, the next Install recreates it.
 
 <div class="note"><b>Updates stay on the same system.</b> If the manifest says the install was made on the other system, Check for updates tells you, marks the clients "other platform" and never installs this system's builds over them. Mods are the same on both systems and are still checked. To switch a folder to this system's clients, click <b>Install</b>.</div>
+
+## 7.1 Updating the installer itself
+
+**Update installer** checks GitHub for a newer release of Based Quake Installer. If there is one, it shows the version and what's new, with **Update now** and **Later**. Otherwise it says you have the latest version. It only updates the installer program; your games, mods and configs are not touched.
+
+- **Windows exe:** downloads the new zip, checks its size and sha256, swaps in the new `BasedQuakeInstaller.exe` and restarts. The old exe is left as `BasedQuakeInstaller.exe.old` and deleted the next time the installer starts.
+- **Linux .deb:** installs the new package with `pkexec apt-get install` (asks for your password). If that isn't possible, it shows the `sudo apt install` command to run.
+- **Linux tarball:** replaces the program files in its folder and restarts.
+- If the folder can't be written to (or for a git checkout), it opens the release page instead.
+
+With **Check for a new installer when it starts** ticked (the default), the installer checks quietly on start and only shows a small notice next to the button. Nothing pops up if you're offline.
 
 # 8. Troubleshooting and FAQ
 

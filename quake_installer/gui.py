@@ -15,7 +15,7 @@ import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, cfg, binds_mods, keycapture, mods as modlib, settings
+from . import __version__, cfg, binds_mods, keycapture, mods as modlib, selfupdate, settings
 from .constants import (APP_TITLE, DEFAULT_ROOT, LOOK_GL, LOOK_SOFT, MAX_NAME_LEN,
                         PLATFORM_LABELS, host_platform)
 from .installer import Cancelled, InstallError, Options, Reporter, run_install
@@ -242,6 +242,9 @@ class InstallerApp(object):
         self.platform = host_platform()  # always the OS we run on
         self.var_status = tk.StringVar(value="Ready.")
         self.var_paths = tk.StringVar()
+        self.var_self = tk.StringVar()  # quiet "new installer available" notice
+        self.var_self_auto = tk.BooleanVar(value=True)
+        self.self_worker = None
         self.mod_specs = modlib.load_specs()
         self.bind_vars = {}   # action_id -> StringVar (start empty)
         self.bind_entries = []
@@ -256,6 +259,9 @@ class InstallerApp(object):
         self._update_paths()
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.after(100, self._poll)
+        selfupdate.cleanup_old()  # the exe left over from the last self-update
+        if self.var_self_auto.get():
+            root.after(1500, lambda: self._start_self_check(quiet=True))
 
     # ------------------------------------------------------------------ layout
     def _build(self):
@@ -455,6 +461,10 @@ class InstallerApp(object):
         self.btn_cancel.pack(side="left")
         self.btn_folder = ttk.Button(b, text="Open folder", command=self._open_folder)
         self.btn_folder.pack(side="right")
+        self.btn_self = ttk.Button(b, text="Update installer", command=self._start_self_check)
+        self.btn_self.pack(side="right", padx=6)
+        self.lbl_self = ttk.Label(b, textvariable=self.var_self, foreground="#1a4f8b")
+        self.lbl_self.pack(side="right", padx=6)
 
         # Progress
         p = ttk.LabelFrame(outer, text="Progress", padding=6)
@@ -533,11 +543,14 @@ class InstallerApp(object):
             "binds": {k: v.get() for k, v in self.bind_vars.items() if v.get().strip()},
             "mod_binds": {mk: {a: v.get() for a, v in mv.items() if v.get().strip()}
                           for mk, mv in self.mod_bind_vars.items()},
+            "check_installer_updates": bool(self.var_self_auto.get()),
         }
 
     def _load_settings(self):
         """Last-used settings, or the Default preset on first run."""
         data = settings.load()
+        if data and data.get("check_installer_updates") is False:
+            self.var_self_auto.set(False)
         if not data:
             self._apply_preset("vanilla")
             self._log("First run: binds filled from the Default preset (stock default.cfg).")
@@ -621,7 +634,7 @@ class InstallerApp(object):
     def _set_busy(self, busy):
         st = "disabled" if busy else "normal"
         widgets = ([self.ent_root, self.btn_browse, self.ent_name, self.btn_install,
-                    self.btn_cfg, self.btn_check] +
+                    self.btn_cfg, self.btn_check, self.btn_self] +
                    self.radios + self.bind_entries + self.preset_buttons)
         for w in widgets:
             w.configure(state=st)
@@ -751,6 +764,115 @@ class InstallerApp(object):
         except Exception as exc:
             self.q.put(("error", "Update failed: %s" % exc))
 
+    # ------------------------------------------------------ installer self-update
+    def _start_self_check(self, quiet=False):
+        if (self.self_worker and self.self_worker.is_alive()) or \
+                (self.worker and self.worker.is_alive()):
+            return
+        if not quiet:
+            self.var_status.set("Checking for a new version of the installer...")
+        self.self_worker = threading.Thread(target=self._self_check_worker, args=(quiet,),
+                                            daemon=True)
+        self.self_worker.start()
+
+    def _self_check_worker(self, quiet):
+        res = selfupdate.check(timeout=8 if quiet else 15)
+        self.q.put(("selfcheck", (quiet, res)))
+
+    def _show_self_check(self, quiet, res):
+        if quiet:  # startup check: a small notice only, never a popup
+            if res.status == selfupdate.STATUS_UPDATE:
+                self.var_self.set("Installer %s is available" % res.release.version)
+            return
+        self.var_status.set(res.message)
+        if res.status == selfupdate.STATUS_ERROR:
+            self._log("WARN: installer update check: " + res.message)
+            messagebox.showwarning(APP_TITLE, res.message)
+            return
+        if res.status != selfupdate.STATUS_UPDATE:
+            self.var_self.set("")
+            messagebox.showinfo(APP_TITLE, res.message)
+            return
+        rel = res.release
+        self.var_self.set("Installer %s is available" % rel.version)
+        win = tk.Toplevel(self.root)
+        win.title("Update installer")
+        win.transient(self.root)
+        frm = ttk.Frame(win, padding=12)
+        frm.pack(fill="both", expand=True)
+        ttk.Label(frm, font=("TkDefaultFont", 10, "bold"),
+                  text="Based Quake Installer %s is available. You have %s."
+                       % (rel.version, __version__)).pack(anchor="w")
+        if rel.notes:
+            ttk.Label(frm, text="What's new:").pack(anchor="w", pady=(8, 0))
+            ttk.Label(frm, text=rel.notes, justify="left", wraplength=520).pack(
+                anchor="w", padx=(8, 0))
+        ttk.Label(frm, foreground="#555", wraplength=520, justify="left",
+                  text="This updates the installer program only. Your games, mods and "
+                       "configs are not touched.").pack(anchor="w", pady=(10, 0))
+        ttk.Checkbutton(frm, text="Check for a new installer when it starts",
+                        variable=self.var_self_auto,
+                        command=self._save_self_auto).pack(anchor="w", pady=(6, 0))
+        bar = ttk.Frame(frm)
+        bar.pack(fill="x", pady=(10, 0))
+        ttk.Button(bar, text="Later", command=win.destroy).pack(side="right")
+        ttk.Button(bar, text="Update now",
+                   command=lambda: (win.destroy(), self._start_self_update(rel))
+                   ).pack(side="right", padx=6)
+        self.self_window = win
+
+    def _save_self_auto(self):
+        settings.update(check_installer_updates=bool(self.var_self_auto.get()))
+
+    def _start_self_update(self, rel):
+        if self.worker and self.worker.is_alive():
+            return
+        self.cancel_event.clear()
+        self._set_busy(True)
+        self._step = (1, 1)
+        self.pb_file["value"] = self.pb_total["value"] = 0
+        self._log("=" * 60)
+        self._log("Updating the installer to %s..." % rel.version)
+        self.var_status.set("Updating the installer...")
+        self.worker = threading.Thread(target=self._self_update_worker, args=(rel,),
+                                       daemon=True)
+        self.worker.start()
+
+    def _self_update_worker(self, rel):
+        rep = QueueReporter(self.q)
+        try:
+            out = selfupdate.perform(rel, progress=rep.progress, cancel_event=self.cancel_event,
+                                     log=rep.log)
+        except Cancelled:
+            self.q.put(("cancelled", None))
+            return
+        except Exception as exc:
+            out = selfupdate.Outcome(url=rel.html_url, message="The update didn't work: %s"
+                                     "\n\nOpening the release page instead." % exc)
+        self.q.put(("selfupdated", out))
+
+    def _finish_self_update(self, out):
+        self._set_busy(False)
+        if out.restart_cmd:
+            self._log("OK  " + out.message + " Restarting...")
+            self.var_status.set(out.message + " Restarting...")
+            messagebox.showinfo(APP_TITLE, out.message + "\n\nThe installer will now restart.")
+            try:
+                import subprocess
+                subprocess.Popen(out.restart_cmd, env=selfupdate.restart_env(),
+                                 cwd=os.path.dirname(out.restart_cmd[-1]) or None)
+            except OSError as exc:
+                messagebox.showwarning(APP_TITLE, "Updated, but couldn't restart (%s). "
+                                       "Start the installer again yourself." % exc)
+            self.root.destroy()
+            return
+        self._log("WARN: " + out.message.replace("\n", " "))
+        self.var_status.set("Installer not updated.")
+        messagebox.showinfo(APP_TITLE, out.message)
+        if out.url:
+            import webbrowser
+            webbrowser.open(out.url)
+
     def _start_install(self, configs_only=False):
         if self.worker and self.worker.is_alive():
             return
@@ -824,6 +946,10 @@ class InstallerApp(object):
                         self.var_status.set("Step %d of %d: %s" % (i, steps, _fmt_bytes(done)))
                 elif kind == "done":
                     self._finish_ok(data)
+                elif kind == "selfcheck":
+                    self._show_self_check(*data)
+                elif kind == "selfupdated":
+                    self._finish_self_update(data)
                 elif kind == "checked":
                     self._show_updates(data)
                 elif kind == "updated":

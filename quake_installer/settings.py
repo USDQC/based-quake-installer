@@ -11,7 +11,7 @@ import os
 import sys
 
 FILENAME = "settings.json"
-KEYS = ("root", "player_name", "look", "binds", "mod_binds")
+KEYS = ("root", "player_name", "look", "binds", "mod_binds", "check_installer_updates")
 
 
 def settings_dir():
@@ -56,3 +56,10 @@ def save(values, folder=None):
         return p
     except OSError:
         return None  # settings are a convenience; never fail an install over them
+
+
+def update(folder=None, **values):
+    """Change a few saved values and keep the rest."""
+    data = load(folder) or {}
+    data.update(values)
+    return save(data, folder)
