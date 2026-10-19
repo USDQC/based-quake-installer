@@ -181,6 +181,23 @@ def render_mod_binds_cfg(mod_key, binds, title=None):
     return "\r\n".join(lines)
 
 
+def key_conflicts(mod_key, mod_binds, general_binds):
+    """Keys used by both a mod bind and a general bind: [(KEY, mod_label, general_label)].
+
+    Not an error: the mod's binds.cfg runs last in that gamedir, so the mod bind wins
+    there and the general bind still applies everywhere else."""
+    from . import cfg
+    general = {}
+    for action_id, key in cfg.clean_binds(general_binds).items():
+        general.setdefault(key.lower(), cfg.ACTION_BY_ID[action_id][2])
+    labels = action_by_id(mod_key)
+    out = []
+    for action_id, key in sorted(clean_mod_binds(mod_key, mod_binds).items()):
+        if key.lower() in general:
+            out.append((key, labels[action_id][2], general[key.lower()]))
+    return out
+
+
 EXEC_LINE = "exec binds.cfg"
 BASED_LINE = "exec based.cfg"
 _TOP = "// Based Quake Installer: your name/binds/look (id1/based.cfg)"

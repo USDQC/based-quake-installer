@@ -168,6 +168,9 @@ def write_mod_configs(opts, rep, result):
             rep.log("  WARN: mod binds for %s: unknown action(s) %s dropped (known: %s)"
                     % (key, ", ".join(bad),
                        ", ".join(a[0] for a in binds_mods.actions_for(key)) or "none"))
+        for k, mod_label, gen_label in binds_mods.key_conflicts(key, binds, opts.binds):
+            rep.log("  NOTE: %s: %s is bound to both '%s' (mod) and '%s'; the mod bind "
+                    "wins in that mod only (binds.cfg)" % (key, k, mod_label, gen_label))
     for spec, label, target in installed_mod_dirs(opts):
         key = spec["key"]
         if binds_mods.actions_for(key):

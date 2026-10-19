@@ -41,6 +41,7 @@ BIND_ACTIONS = [
     ("klook", "+klook", "Keyboard look"),
     ("moveup", "+moveup", "Swim up"),
     ("movedown", "+movedown", "Swim down"),
+    ("showscores", "+showscores", "Show scoreboard"),
     # --- Weapons (stock impulse slots) ---
     ("impulse1", "impulse 1", "Weapon 1 (axe)"),
     ("impulse2", "impulse 2", "Weapon 2 (shotgun)"),
@@ -86,7 +87,8 @@ _SPECIAL_KEYS = {
     "KP_RIGHTARROW": "KP_RIGHTARROW", "KP_HOME": "KP_HOME",
     "KP_UPARROW": "KP_UPARROW", "KP_PGUP": "KP_PGUP", "KP_DEL": "KP_DEL",
     "KP_SLASH": "KP_SLASH", "KP_MINUS": "KP_MINUS", "KP_PLUS": "KP_PLUS",
-    "KP_ENTER": "KP_ENTER", "KP_MULTIPLY": "KP_MULTIPLY",
+    "KP_ENTER": "KP_ENTER", "KP_MULTIPLY": "KP_MULTIPLY", "KP_STAR": "KP_STAR",
+    "CAPSLOCK": "CAPSLOCK",
 }
 for _i in range(1, 13):
     _SPECIAL_KEYS["F%d" % _i] = "F%d" % _i
@@ -159,6 +161,7 @@ PRESET_VANILLA = {
     "klook": "INS",
     "moveup": "d",
     "movedown": "c",
+    "showscores": "TAB",
     "impulse1": "1",
     "impulse2": "2",
     "impulse3": "3",

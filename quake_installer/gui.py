@@ -15,7 +15,7 @@ import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import __version__, cfg, binds_mods, mods as modlib, settings
+from . import __version__, cfg, binds_mods, keycapture, mods as modlib, settings
 from .constants import (APP_TITLE, DEFAULT_ROOT, LOOK_GL, LOOK_SOFT, MAX_NAME_LEN,
                         PLATFORM_LABELS, host_platform)
 from .installer import Cancelled, InstallError, Options, Reporter, run_install
@@ -88,6 +88,136 @@ def _mod_list_line(spec):
     return ("• %s (%s)" % (name, tag)) if tag else ("• %s" % name)
 
 
+BIND_HELP = "Click a box, then press the key or mouse button you want. Click ✕ to clear a bind."
+_PROMPT = "Press a key…"
+
+
+class KeyBox(object):
+    """A bind box that captures a key or mouse button instead of free typing.
+
+    Click it -> 'Press a key…'; the next key, mouse button or wheel turn fills it
+    with the Quake key name. Escape (or leaving the window) cancels and keeps the
+    old value. The real value lives in ``var``; the box only displays it.
+    """
+
+    active = None  # the KeyBox currently capturing, if any
+
+    def __init__(self, parent, var, width=14, on_change=None):
+        self.var = var
+        self.on_change = on_change
+        self.capturing = False
+        self.enabled = True
+        self.shown = tk.StringVar(value=var.get())
+        var.trace_add("write", lambda *a: self._sync())
+        self.entry = tk.Entry(parent, textvariable=self.shown, width=width,
+                              state="readonly", cursor="hand2", relief="solid", bd=1,
+                              readonlybackground="white", fg="black",
+                              disabledbackground="#eeeeee", takefocus=0)
+        self._ws = self.entry.tk.call("tk", "windowingsystem")
+        e = self.entry
+        e.bind("<ButtonPress>", self._on_button)
+        e.bind("<KeyPress>", self._on_key)
+        e.bind("<MouseWheel>", self._on_wheel)
+        e.bind("<FocusOut>", lambda _e: self.cancel())
+        self.btn = ttk.Button(parent, text="✕", width=2, command=self.clear, takefocus=0,
+                              style="Clear.TButton")
+
+    def grid(self, row, column, **kw):
+        self.entry.grid(row=row, column=column, sticky="w", pady=1)
+        self.btn.grid(row=row, column=column + 1, sticky="w", padx=(1, kw.get("gap", 14)),
+                      pady=1)
+
+    def _sync(self):
+        if not self.capturing:
+            self.shown.set(self.var.get())
+
+    def set_enabled(self, enabled):
+        if not enabled:
+            self.cancel()
+        self.enabled = enabled
+        self.entry.configure(state="readonly" if enabled else "disabled")
+        self.btn.configure(state="normal" if enabled else "disabled")
+
+    def clear(self):
+        self.cancel()
+        self.var.set("")
+
+    def start(self):
+        if KeyBox.active is not None and KeyBox.active is not self:
+            KeyBox.active.cancel()
+        KeyBox.active = self
+        self.capturing = True
+        self.shown.set(_PROMPT)
+        self.entry.configure(readonlybackground="#ffe680")
+        self.entry.focus_set()
+        try:
+            self.entry.grab_set()  # mouse buttons anywhere in the window go to this box
+        except tk.TclError:
+            pass
+
+    def _finish(self):
+        self.capturing = False
+        if KeyBox.active is self:
+            KeyBox.active = None
+        try:
+            self.entry.grab_release()
+        except tk.TclError:
+            pass
+        self.entry.configure(readonlybackground="white")
+        self.shown.set(self.var.get())
+
+    def cancel(self):
+        if self.capturing:
+            self._finish()
+
+    def accept(self, key):
+        self._finish()
+        self.var.set(key)
+        if self.on_change:
+            self.on_change(self, key)
+
+    def _on_button(self, event):
+        if not self.enabled:
+            return "break"
+        if not self.capturing:
+            if event.num == 1:
+                self.start()
+                return "break"
+            return None  # let the wheel (X11 buttons 4/5) scroll the page
+        # Clicking this box's own ✕ while it waits clears it instead of binding MOUSE1.
+        if event.num == 1:
+            try:
+                hit = self.entry.winfo_containing(event.x_root, event.y_root)
+            except (tk.TclError, KeyError):
+                hit = None
+            if hit is self.btn:
+                self.clear()
+                return "break"
+        key = keycapture.key_from_button(event.num, self._ws)
+        if key:
+            self.accept(key)
+        return "break"
+
+    def _on_wheel(self, event):
+        if self.capturing:
+            key = keycapture.key_from_wheel(event.delta)
+            if key:
+                self.accept(key)
+            return "break"
+        return None
+
+    def _on_key(self, event):
+        if not self.capturing:
+            return "break"
+        if event.keysym == keycapture.CANCEL:
+            self.cancel()
+            return "break"
+        key = keycapture.key_from_keysym(event.keysym, event.keycode, self._ws)
+        if key:
+            self.accept(key)
+        return "break"
+
+
 class InstallerApp(object):
     def __init__(self, root):
         self.root = root
@@ -104,6 +234,7 @@ class InstallerApp(object):
             ttk.Style().theme_use("vista" if IS_WINDOWS else "clam")
         except tk.TclError:
             pass
+        ttk.Style().configure("Clear.TButton", padding=(2, 0))
 
         self.var_root = tk.StringVar(value=DEFAULT_ROOT)
         self.var_name = tk.StringVar(value="player")
@@ -114,6 +245,7 @@ class InstallerApp(object):
         self.mod_specs = modlib.load_specs()
         self.bind_vars = {}   # action_id -> StringVar (start empty)
         self.bind_entries = []
+        self.bind_boxes = []  # KeyBox widgets (general + every mod page)
         self.mod_bind_vars = {}  # mod_key -> {action_id -> StringVar}
         self.radios = []
         self.preset_buttons = []
@@ -202,8 +334,10 @@ class InstallerApp(object):
         self.preset_buttons.append(btn_clear)
         ttk.Label(
             preset_row, foreground="#555",
-            text="QW Customize Controls + weapons. Keys: w, SPACE, MOUSE1…"
+            text="QuakeWorld controls + weapons"
         ).pack(side="left", padx=(8, 0))
+        ttk.Label(tab_qw, text=BIND_HELP).grid(row=2, column=0, columnspan=2, sticky="w",
+                                                pady=(4, 0))
 
         canvas = tk.Canvas(tab_qw, highlightthickness=0, height=260)
         sb = ttk.Scrollbar(tab_qw, orient="vertical", command=canvas.yview)
@@ -215,6 +349,8 @@ class InstallerApp(object):
         win = canvas.create_window((0, 0), window=inner, anchor="nw")
 
         def _on_configure(_event=None):
+            if canvas.winfo_reqwidth() < inner.winfo_reqwidth():
+                canvas.configure(width=inner.winfo_reqwidth())  # never clip the ✕ column
             canvas.configure(scrollregion=canvas.bbox("all"))
             canvas.itemconfigure(win, width=canvas.winfo_width())
 
@@ -223,15 +359,15 @@ class InstallerApp(object):
 
         mid = (len(cfg.BIND_ACTIONS) + 1) // 2
         for i, (action_id, _cmd, label) in enumerate(cfg.BIND_ACTIONS):
-            col = 0 if i < mid else 2
+            col = 0 if i < mid else 3
             row = i if i < mid else i - mid
             var = tk.StringVar(value="")
             self.bind_vars[action_id] = var
             ttk.Label(inner, text=label + ":", width=18, anchor="w").grid(
                 row=row, column=col, sticky="w", padx=(0, 4), pady=1)
-            ent = ttk.Entry(inner, textvariable=var, width=14)
-            ent.grid(row=row, column=col + 1, sticky="w", padx=(0, 16), pady=1)
-            self.bind_entries.append(ent)
+            box = KeyBox(inner, var, width=14)
+            box.grid(row, col + 1, gap=16)
+            self.bind_boxes.append(box)
         self._bind_canvas = canvas
 
         # Mod binds notebook (only mods with discovered custom actions)
@@ -246,7 +382,8 @@ class InstallerApp(object):
                                     width=24)
         self.cmb_mod.pack(side="left", padx=6)
         ttk.Label(pick, foreground="#555",
-                  text="binds.cfg in each client's gamedir; blank = skip").pack(side="left")
+                  text="saved to binds.cfg in the mod's folder; blank = skip").pack(side="left")
+        ttk.Label(tab_mod, text=BIND_HELP).grid(row=2, column=0, sticky="w", pady=(4, 0))
         pages_host = ttk.Frame(tab_mod)
         pages_host.grid(row=1, column=0, sticky="nsew")
         pages_host.columnconfigure(0, weight=1)
@@ -267,14 +404,14 @@ class InstallerApp(object):
             # Two columns when a mod has many actions, so every field stays visible.
             per_col = (len(actions) + 1) // 2 if len(actions) > 8 else len(actions)
             for i, (action_id, _cmd, label) in enumerate(actions):
-                r, c = 1 + (i % per_col), 2 * (i // per_col)
+                r, c = 1 + (i % per_col), 3 * (i // per_col)
                 var = tk.StringVar(value="")
                 self.mod_bind_vars[mod_key][action_id] = var
-                ttk.Label(frame, text=label + ":", width=24, anchor="w").grid(
+                ttk.Label(frame, text=label + ":", anchor="w").grid(
                     row=r, column=c, sticky="w", padx=(0, 4), pady=1)
-                ent = ttk.Entry(frame, textvariable=var, width=10)
-                ent.grid(row=r, column=c + 1, sticky="w", padx=(0, 8), pady=1)
-                self.bind_entries.append(ent)
+                box = KeyBox(frame, var, width=10)
+                box.grid(r, c + 1, gap=10)
+                self.bind_boxes.append(box)
 
         titles = list(self.mod_pages)
         self.cmb_mod.configure(values=titles)
@@ -357,6 +494,8 @@ class InstallerApp(object):
         win = canvas.create_window((0, 0), window=inner, anchor="nw")
 
         def _cfg(_e=None):
+            if canvas.winfo_reqwidth() < inner.winfo_reqwidth():
+                canvas.configure(width=inner.winfo_reqwidth())  # never clip the ✕ column
             canvas.configure(scrollregion=canvas.bbox("all"))
             canvas.itemconfigure(win, width=canvas.winfo_width())
 
@@ -486,6 +625,8 @@ class InstallerApp(object):
                    self.radios + self.bind_entries + self.preset_buttons)
         for w in widgets:
             w.configure(state=st)
+        for box in self.bind_boxes:
+            box.set_enabled(not busy)
         self.btn_cancel.configure(state="normal" if busy else "disabled")
 
     # --------------------------------------------------------------- actions

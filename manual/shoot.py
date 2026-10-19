@@ -35,6 +35,8 @@ def s1():
     grab(root, "mod-binds-tf.png"); page("Rune Quake"); root.after(700, s2)
 def s2():
     grab(root, "mod-binds-rune.png")
+    if not os.environ.get("SHOT_INSTALL"):  # skip the Check for updates shot
+        root.destroy(); return
     root_dir = os.environ["SHOT_INSTALL"]  # path of an existing, up-to-date install
     items = updater.check_updates(root_dir, app.platform, log=lambda *a: None)
     app._show_updates(items)

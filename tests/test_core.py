@@ -86,7 +86,7 @@ class CfgTests(unittest.TestCase):
         ids = [a[0] for a in cfg.BIND_ACTIONS]
         self.assertIn("changeweapon", ids)
         self.assertIn("mouse_mlook", ids)
-        self.assertNotIn("showscores", ids)
+        self.assertIn("showscores", ids)  # v1.6.5: Show scoreboard, Default = TAB
         self.assertNotIn("mouse_attack", ids)
         self.assertNotIn("messagemode", ids)
         self.assertEqual(cfg.ACTION_BY_ID["changeweapon"][1], "impulse 10")

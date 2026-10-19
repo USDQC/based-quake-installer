@@ -1,7 +1,7 @@
 <div class="titlepage">
 <div class="tp-kicker">User Manual</div>
 <h1 class="tp-title">Based Quake Installer</h1>
-<div class="tp-version">Version 1.6.4</div>
+<div class="tp-version">Version 1.6.5</div>
 <div class="tp-sub">Set up unezQuake and FTE, the Quake shareware data, and ten classic mods in one go, with your name, look and key binds already written.</div>
 <img class="tp-shot" src="img/main-window.png" alt="Based Quake Installer main window">
 <div class="tp-foot">Written for Quake and QuakeWorld players · Windows · Linux<br>Installer by USDQC · Manual date: October 2026</div>
@@ -83,7 +83,7 @@ The exe takes a few seconds to open, because it unpacks itself to a temporary fo
 The easy way is the `.deb` package. Open a terminal in the folder where you downloaded it and run:
 
 ```
-sudo apt install ./based-quake-installer_1.6.4_all.deb
+sudo apt install ./based-quake-installer_1.6.5_all.deb
 ```
 
 This pulls in `python3` and `python3-tk` automatically and adds a **Based Quake Installer** entry to your applications menu. You can also start it from a terminal with `based-quake-installer`. The program itself lives in `/opt/based-quake-installer`.
@@ -159,12 +159,15 @@ The **Binds** box has two tabs. **Custom binds** holds your everyday keys for bo
 | Turn right | Keyboard look | Weapon 7 (rocket) |
 | Run | Swim up | Weapon 8 (shaft) |
 | Step left | Swim down | Weapon 0 |
+| | Show scoreboard | |
 
 **How it works:**
 
-- Type one key name in each box (see the key-name table below).
-- **A blank box means "unbound".** Nothing is written for it.
-- **Default** fills every box with the stock Quake keys from the original `default.cfg` (Ctrl to attack, arrow keys to move, Space to jump, 1–8 for weapons, and so on).
+- **Click a box, then press the key or mouse button you want.** The box turns yellow and says *Press a key…* while it waits; the key you press (or the mouse button you click, or a turn of the mouse wheel) fills it in with the name Quake uses, such as `w`, `SPACE` or `MOUSE2`.
+- **Esc** cancels and keeps what was there. (Esc itself can't be bound here; it always opens the Quake menu.)
+- You can't type into the boxes, so a bad key name can't get in.
+- The small **✕** next to each box clears just that bind. **A blank box means "unbound".** Nothing is written for it.
+- **Default** fills every box with the stock Quake keys from the original `default.cfg` (Ctrl to attack, arrow keys to move, Space to jump, Tab for the scoreboard, 1–8 for weapons, and so on).
 - **Clear** empties every box, on **both** the Custom binds tab and the Mod binds tab.
 - If you put the same key on two actions, the one lower in the list wins.
 
@@ -172,23 +175,23 @@ The **Binds** box has two tabs. **Custom binds** holds your everyday keys for bo
 
 A few handy keys are always added for you, unless you've used that key for something else: **Pause** = pause, **Esc** = menu, **~** and **\`** = console, **+**/**=** = bigger screen, **-** = smaller screen, **F12** = screenshot, **\\** = mouse look.
 
-**Key names.** Use the names Quake itself uses. Capitals don't matter, so `space`, `Space` and `SPACE` are all fine.
+**Key names.** The boxes show the names unezQuake and FTE use in their configs. Shifted keys count as the plain key (Shift+; is still `SEMICOLON`), and the left and right Shift, Ctrl and Alt keys both give `SHIFT`, `CTRL` and `ALT`.
 
-| Type this | For |
+| The box shows | When you press |
 |---|---|
 | `a` … `z`, `0` … `9` | letter and number keys (e.g. `w`, `e`, `1`) |
 | `,` `.` `/` `\` `[` `]` `'` `` ` `` `~` `-` `=` `+` | punctuation keys |
-| `SEMICOLON` | the ; key (you can't type a bare `;`) |
-| `SPACE` `TAB` `ENTER` `ESCAPE` `BACKSPACE` `PAUSE` | the usual named keys |
+| `SEMICOLON` | the ; key (a bare `;` would end the bind command) |
+| `SPACE` `TAB` `ENTER` `BACKSPACE` `PAUSE` `CAPSLOCK` | the usual named keys |
 | `SHIFT` `CTRL` `ALT` | modifier keys |
 | `UPARROW` `DOWNARROW` `LEFTARROW` `RIGHTARROW` | arrow keys |
 | `INS` `DEL` `HOME` `END` `PGUP` `PGDN` | the editing block |
 | `F1` … `F12` | function keys |
 | `MOUSE1` `MOUSE2` `MOUSE3` `MOUSE4` `MOUSE5` | mouse buttons (1 = left, 2 = right, 3 = middle) |
 | `MWHEELUP` `MWHEELDOWN` | mouse wheel |
-| `KP_HOME` `KP_UPARROW` `KP_5` `KP_ENTER` `KP_PLUS` … | numeric keypad keys |
+| `KP_HOME` `KP_UPARROW` `KP_5` `KP_ENTER` `KP_PLUS` `KP_STAR` … | numeric keypad keys (the same with Num Lock on or off) |
 
-Aliases are accepted too: `CONTROL` → `CTRL`, `ESC` → `ESCAPE`, `RETURN` → `ENTER`, `INSERT` → `INS`, `DELETE` → `DEL`. A key name can't contain spaces or quotes. If something isn't accepted, you'll get an "Invalid key in binds" message when you click Install, and nothing gets written.
+A key that Quake has no name for (for example the Windows key, or a letter that only exists on a non-US keyboard) is ignored; the box keeps waiting, so press another key or Esc.
 
 ## 3.4 Binds: the Mod binds tab
 
@@ -196,9 +199,10 @@ Aliases are accepted too: `CONTROL` → `CTRL`, `ESC` → `ESCAPE`, `RETURN` →
 
 Many mods add their own commands, such as throwing grenades in Team Fortress or firing the grappling hook in CTF. The **Mod binds** tab has a **Mod:** drop-down at the top to pick the mod, and a scrollable page of boxes for it: Team Fortress, Thunderwalker CTF, Rocket Arena, PainKeep, AirQuake (FTE), Quake Rally (FTE), Get Rich Quake and Rune Quake. The full list of what each mod offers is in Chapter 4.
 
-- Fill in only the ones you want. **Blank = skip.**
+- Click a box and press a key, the same way as on the Custom binds tab; **✕** clears one box. Fill in only the ones you want. **Blank = skip.**
 - Your choices are saved into that mod's own folder as **`binds.cfg`**, in every client that has the mod (a mod with nothing filled in gets an empty `binds.cfg`).
 - Every mod folder's `autoexec.cfg` runs `exec based.cfg` first (your name, Custom binds and look from `id1`), then the mod's own autoexec lines, then `exec binds.cfg`. So Mod binds are **added on top of** your Custom binds, and a mod's own settings still apply.
+- If a mod bind uses a key that a Custom bind already uses (say Tab for Team Fortress *Inventory*), both are kept: the mod bind wins inside that mod only, and the log notes it. Everywhere else the key keeps its Custom bind.
 - If a page has more boxes than fit, scroll it (scroll bar or mouse wheel).
 
 Headhunters and Future vs Fantasy don't have tabs: Headhunters' docs don't list any bindable commands, and Future vs Fantasy's readme literally says "No Impulses to Bind". Your normal weapon keys cover them.
@@ -246,7 +250,7 @@ At the end the log shows **INSTALL COMPLETE**, where each program is, which mods
 1. Check the install folder (the default is fine).
 2. Type your **player name**.
 3. Pick **Software look** or **OpenGL look**.
-4. Check the Custom binds (they start as the Default preset), then change any keys you like (e.g. `w`/`s`/`a`/`d` and `MOUSE1`).
+4. Check the Custom binds (they start as the Default preset), then click any box and press the key you want instead (e.g. `w`/`s`/`a`/`d` and `MOUSE1`).
 5. Optionally fill in a few **Mod binds** (e.g. Team Fortress grenades).
 6. Click **Install** and wait for **INSTALL COMPLETE**.
 7. Optionally copy your `pak1.pak` in (Chapter 5), then play (Chapter 6).
