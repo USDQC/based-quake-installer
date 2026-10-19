@@ -31,13 +31,13 @@ MOD_BIND_ACTIONS = {
     ],
     # Thunderwalker CTF / ThreeWave — twdocs/impulses.htm + Threewave wiki
     "thunderwalker": [
-        ("q_airfist", "+bqi_airfist", "Quick airfist (fire, switch back)"),
-        ("q_hook", "+bqi_hook", "Quick hook (hold, switch back)"),
-        ("hook", "impulse 22", "Grappling harpoon"),
+        ("q_airfist", "+bqi_airfist", "Quick AirFist (fire, switch back)"),
+        ("q_hook", "+bqi_hook", "Quick grappling hook (hold, switch back)"),
+        ("hook", "impulse 22", "Grappling hook"),
         ("throwammo", "impulse 20", "Throw ammo backpack"),
         ("throwweapon", "impulse 21", "Throw current weapon"),
         ("flagstatus", "impulse 23", "Flag status"),
-        ("airfist", "impulse 47", "Airfist"),
+        ("airfist", "impulse 47", "AirFist"),
         ("lastweapon", "impulse 69", "Previous weapon"),
         ("flare", "impulse 160", "Fire flare"),
         ("runeinfo", "impulse 180", "Rune info"),

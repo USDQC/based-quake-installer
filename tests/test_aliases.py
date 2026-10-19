@@ -74,6 +74,21 @@ class QuickAliasTests(unittest.TestCase):
         self.assertIn("bind MOUSE4 +bqi_hook", t)
         self.assertIn("bind KP_INS +bqi_airfist", t)
 
+    def test_labels_consistent(self):
+        tw = {a: label for a, _c, label in binds_mods.actions_for("thunderwalker")}
+        self.assertEqual(tw["hook"], "Grappling hook")
+        self.assertEqual(tw["q_hook"], "Quick grappling hook (hold, switch back)")
+        self.assertEqual(tw["airfist"], "AirFist")
+        self.assertEqual(tw["q_airfist"], "Quick AirFist (fire, switch back)")
+        pk = {a: label for a, _c, label in binds_mods.actions_for("painkeep")}
+        self.assertEqual(pk["airfist"], "AirFist")
+        self.assertEqual(pk["q_airfist"], "Quick AirFist (fire, switch back)")
+
+    def test_saved_binds_keyed_by_id(self):
+        # settings.json stores mod binds by action id, so label changes keep old binds.
+        saved = {"hook": "e", "airfist": "r", "q_hook": "MOUSE2", "q_airfist": "f"}
+        self.assertEqual(binds_mods.clean_mod_binds("thunderwalker", saved), saved)
+
 
 if __name__ == "__main__":
     unittest.main()

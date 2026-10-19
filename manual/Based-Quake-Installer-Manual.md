@@ -311,13 +311,13 @@ These are the actions offered on each **Mod binds** tab. All of them come from t
 
 | Action | Quake command |
 |---|---|
-| Quick airfist (fire, switch back) | `+bqi_airfist` = `impulse 47; +attack`, release `-attack; impulse 69` |
-| Quick hook (hold, switch back) | `+bqi_hook` = `impulse 22; +attack`, release `-attack; impulse 69` |
-| Grappling harpoon | `impulse 22` |
+| Quick AirFist (fire, switch back) | `+bqi_airfist` = `impulse 47; +attack`, release `-attack; impulse 69` |
+| Quick grappling hook (hold, switch back) | `+bqi_hook` = `impulse 22; +attack`, release `-attack; impulse 69` |
+| Grappling hook | `impulse 22` |
 | Throw ammo backpack | `impulse 20` |
 | Throw current weapon | `impulse 21` |
 | Flag status | `impulse 23` |
-| Airfist | `impulse 47` |
+| AirFist | `impulse 47` |
 | Previous weapon | `impulse 69` |
 | Fire flare | `impulse 160` |
 | Rune info | `impulse 180` |
