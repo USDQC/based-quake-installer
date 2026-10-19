@@ -1,7 +1,7 @@
 <div class="titlepage">
 <div class="tp-kicker">User Manual</div>
 <h1 class="tp-title">Based Quake Installer</h1>
-<div class="tp-version">Version 1.6.5</div>
+<div class="tp-version">Version 1.6.6</div>
 <div class="tp-sub">Set up unezQuake and FTE, the Quake shareware data, and ten classic mods in one go, with your name, look and key binds already written.</div>
 <img class="tp-shot" src="img/main-window.png" alt="Based Quake Installer main window">
 <div class="tp-foot">Written for Quake and QuakeWorld players · Windows · Linux<br>Installer by USDQC · Manual date: October 2026</div>
@@ -83,7 +83,7 @@ The exe takes a few seconds to open, because it unpacks itself to a temporary fo
 The easy way is the `.deb` package. Open a terminal in the folder where you downloaded it and run:
 
 ```
-sudo apt install ./based-quake-installer_1.6.5_all.deb
+sudo apt install ./based-quake-installer_1.6.6_all.deb
 ```
 
 This pulls in `python3` and `python3-tk` automatically and adds a **Based Quake Installer** entry to your applications menu. You can also start it from a terminal with `based-quake-installer`. The program itself lives in `/opt/based-quake-installer`.
@@ -132,10 +132,10 @@ A full path is required: on Windows something like `C:\Games` or `D:\Games` (net
 
 | Choice | What it does |
 |---|---|
-| **Software look** (default) | The original 1996 feel: sharp, chunky pixels (no texture smoothing) and classic square particles. In FTE it also turns on software-style colour banding and the old "wobbly" model texturing. |
+| **Software look** (default) | The original 1996 feel: sharp, chunky pixels (no texture smoothing) and classic square particles. In FTE it also turns on software-style colour banding and the old "wobbly" model texturing. In unezQuake it also keeps the gun, HUD, text and crosshair unsmoothed and draws the HUD at an even 2× scale, so every pixel stays square. |
 | **OpenGL look** | Smooth, filtered textures. FTE uses its modern scripted particles; unezQuake turns on flash-blended lights and 8× anisotropic filtering. |
 
-Both choices also set a few sensible basics in each client: screen size 100, gamma 1.0, volume 0.7, mouse sensitivity 3, and mouse look switched on. The exact setting names differ between clients (for example unezQuake uses <code>freelook</code> and <code>gl_anisotropy</code>; FTE uses <code>mlook_enabled</code> and its own particle settings), so each client's <code>based.cfg</code> gets the names that engine understands.
+Both choices also set a few sensible basics in each client: screen size 100, gamma 1.0, volume 0.7, mouse sensitivity 3, and mouse look switched on. unezQuake also gets the classic small cross crosshair (<code>crosshair 1</code>); FTE keeps its own. The exact setting names differ between clients (for example unezQuake uses <code>freelook</code> and <code>gl_anisotropy</code>; FTE uses <code>mlook_enabled</code> and its own particle settings), so each client's <code>based.cfg</code> gets the names that engine understands.
 
 **Which builds you get.** There's no platform choice: the installer always installs the builds for the system it runs on.
 

@@ -16,7 +16,7 @@ for lvl, hid, txt in re.findall(r'<h([12]) id="([^"]+)">(.*?)</h\1>', body):
 body = body.replace("<!--TOC-->", '<ul class="toc">%s</ul>' % "".join(toc))
 body = re.sub(r'<h1 id=', '<h1 class="chapter" id=', body)
 css = open("manual.css", encoding="utf-8").read()
-doc = '<!doctype html><html><head><meta charset="utf-8"><title>Based Quake Installer v1.6.5 – User Manual</title><meta name="author" content="USDQC"><meta name="description" content="User manual for Based Quake Installer 1.6.5"><meta name="generator" content="Based Quake Installer manual build"><style>%s</style></head><body>%s</body></html>' % (css, body)
+doc = '<!doctype html><html><head><meta charset="utf-8"><title>Based Quake Installer v1.6.6 – User Manual</title><meta name="author" content="USDQC"><meta name="description" content="User manual for Based Quake Installer 1.6.6"><meta name="generator" content="Based Quake Installer manual build"><style>%s</style></head><body>%s</body></html>' % (css, body)
 open("Based-Quake-Installer-Manual.html", "w", encoding="utf-8").write(doc)
 weasyprint.HTML(string=doc, base_url=".").write_pdf("Based-Quake-Installer-Manual.pdf")
 print("ok")

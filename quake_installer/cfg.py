@@ -236,7 +236,8 @@ CLIENT_BASE = {
     # sb/sources.txt is written by sb_sources.write_sources(); ezQuake only auto-ticks
     # "id limbo"/"Global"/"QuakeServers.net"/"Asgaard", so tick every source we ship.
     # Sources load before configs run, so these work from based.cfg.
-    "unez": "freelook 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
+    # crosshair: unezQuake's default is 4; 1 is the classic "+".
+    "unez": "freelook 1\ncrosshair 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
             + "\n".join(sb_sources.sourcemark_lines()),
 }
 
@@ -259,11 +260,24 @@ r_part_classic_square 0
 r_part_classic_opaque 0
 r_dynamic 1
 vid_renderer gl""",
+    # Square, unfiltered pixels (names/defaults checked in unezQuake 2.1.1 source):
+    # world + gun nearest-filtered, no lerp on resampled images, no smoothing of
+    # text/crosshair/HUD pics, framebuffer upscale unsmoothed, and the 2D layer
+    # auto-sized at a uniform integer scale (no stretch, correct aspect).
     (CLIENT_UNEZ, "soft"): """gl_texturemode GL_NEAREST_MIPMAP_NEAREST
+gl_texturemode_viewmodels GL_NEAREST
+gl_lerpimages 0
+gl_anisotropy 1
+r_smoothtext 0
+r_smoothcrosshair 0
+r_smoothimages 0
+vid_framebuffer_smooth 0
+vid_conwidth 0
+vid_conheight 0
+vid_conscale 2
 r_drawparticles 1
 gl_flashblend 0
 r_dynamic 1
-gl_anisotropy 1
 r_bloom 0""",
     (CLIENT_UNEZ, "gl"): """gl_texturemode GL_LINEAR_MIPMAP_LINEAR
 r_drawparticles 1
