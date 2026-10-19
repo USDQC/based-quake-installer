@@ -264,6 +264,9 @@ vid_renderer gl""",
     # world + gun nearest-filtered, no lerp on resampled images, no smoothing of
     # text/crosshair/HUD pics, framebuffer upscale unsmoothed, and the 2D layer
     # auto-sized at a uniform integer scale (no stretch, correct aspect).
+    # Particles: solid square classic particles (gl_squareparticles 1; the texture is
+    # mipmapped so gl_texturemode keeps it unfiltered); blood trails and bubbles use
+    # classic particles instead of the round QMB ones (their defaults are 1).
     (CLIENT_UNEZ, "soft"): """gl_texturemode GL_NEAREST_MIPMAP_NEAREST
 gl_texturemode_viewmodels GL_NEAREST
 gl_lerpimages 0
@@ -276,6 +279,9 @@ vid_conwidth 0
 vid_conheight 0
 vid_conscale 2
 r_drawparticles 1
+gl_squareparticles 1
+gl_part_bloodtrails 0
+gl_part_bubble 0
 gl_flashblend 0
 r_dynamic 1
 r_bloom 0""",

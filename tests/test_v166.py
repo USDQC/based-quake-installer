@@ -8,7 +8,8 @@ from quake_installer import cfg
 UNEZ_CVARS = {"gl_texturemode", "gl_texturemode_viewmodels", "gl_lerpimages", "gl_anisotropy",
               "r_smoothtext", "r_smoothcrosshair", "r_smoothimages", "vid_framebuffer_smooth",
               "vid_conwidth", "vid_conheight", "vid_conscale", "r_drawparticles",
-              "gl_flashblend", "r_dynamic", "r_bloom", "crosshair"}
+              "gl_flashblend", "r_dynamic", "r_bloom", "crosshair",
+              "gl_squareparticles", "gl_part_bloodtrails", "gl_part_bubble"}
 
 
 def cvars(text):
@@ -48,6 +49,23 @@ class UnezSquarePixelTests(unittest.TestCase):
     def test_gl_look_still_smooth(self):
         self.assertEqual(self.gl["gl_texturemode"], "GL_LINEAR_MIPMAP_LINEAR")
         self.assertNotIn("r_smoothtext", self.gl)
+
+
+class UnezSquareParticleTests(unittest.TestCase):
+    def test_soft_look_square_classic_particles(self):
+        c = cvars(cfg.render_autoexec(cfg.CLIENT_UNEZ, "p", {}, "soft"))
+        self.assertEqual(c["r_drawparticles"], "1")
+        self.assertEqual(c["gl_squareparticles"], "1")
+        self.assertEqual(c["gl_part_bloodtrails"], "0")
+        self.assertEqual(c["gl_part_bubble"], "0")
+        self.assertEqual(c["gl_texturemode"], "GL_NEAREST_MIPMAP_NEAREST")
+
+    def test_gl_look_and_fte_unchanged(self):
+        g = cfg.render_autoexec(cfg.CLIENT_UNEZ, "p", {}, cfg.LOOK_GL)
+        self.assertNotIn("gl_squareparticles", g)
+        f = cfg.render_autoexec(cfg.CLIENT_FTE, "p", {}, "soft")
+        self.assertNotIn("gl_squareparticles", f)
+        self.assertIn("r_part_classic_square 1", f)
 
 
 class CrosshairTests(unittest.TestCase):
