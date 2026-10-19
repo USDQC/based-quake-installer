@@ -230,9 +230,10 @@ class ModTests(unittest.TestCase):
         src = mods.install_mod(spec, fte, os.path.join(self.tmp, "w"), log=lambda *a: None,
                                unez_dir=unez)
         self.assertTrue(src.startswith("binds only"))
-        for t in (fte, unez):
+        # + the server-switch hook: quake.rc (FTE) / frontend.cfg (unezQuake)
+        for t, hook in ((fte, "quake.rc"), (unez, "frontend.cfg")):
             d = os.path.join(t, "runequake")
-            self.assertEqual(sorted(os.listdir(d)), ["autoexec.cfg", "binds.cfg"])
+            self.assertEqual(sorted(os.listdir(d)), ["autoexec.cfg", "binds.cfg", hook])
             with open(os.path.join(d, "autoexec.cfg")) as fh:
                 self.assertIn("exec binds.cfg", fh.read())
 

@@ -319,6 +319,122 @@ def merge_mod_autoexec(gamedir_path):
     return path
 
 
+# --- Server-driven gamedir switch (e.g. joining a Thunderwalker server from base) ---
+# FTE only re-runs its startup configs on a gamedir change when quake.rc, hexen.rc,
+# default.cfg or server.cfg now resolve from a different place (fteqw fs.c
+# FS_ChangeGame / conffile[]). Mods shipping none of those (Thunderwalker, Arena,
+# ...) never ran autoexec.cfg -> binds.cfg after a server switch, so we give them a
+# minimal quake.rc. Leaving the mod moves quake.rc back to id1's, so FTE reloads
+# the base configs (unbindall) and mod binds don't stick.
+# unezQuake never runs autoexec.cfg on a switch; it execs {gamedir}/frontend.cfg
+# (cl_parse.c, cfg_legacy_exec), so each mod (and qw/ for going back) gets one.
+FTE_RELOAD_TRIGGERS = ("quake.rc", "hexen.rc", "default.cfg", "server.cfg")
+HOOK_MARK = "-- written by Based Quake Installer"
+FTE_QUAKE_RC = (
+    "// quake.rc " + HOOK_MARK + "\n"
+    "// Lets FTE run autoexec.cfg (and binds.cfg) when a server switches to this mod.\n"
+    "exec default.cfg\n"
+    "exec config.cfg\n"
+    "exec autoexec.cfg\n"
+    "stuffcmds\n")
+UNEZ_FRONTEND_CFG = (
+    "// frontend.cfg " + HOOK_MARK + "\n"
+    "// unezQuake runs this when a server switches to this game folder.\n"
+    "exec autoexec.cfg\n")
+
+
+def _archive_names(path):
+    """Lowercase file names inside a .pak or .pk3 (empty on any error)."""
+    import struct
+    import zipfile
+    try:
+        if path.lower().endswith(".pak"):
+            with open(path, "rb") as fh:
+                magic, off, size = struct.unpack("<4sii", fh.read(12))
+                if magic != b"PACK" or off < 12 or size < 0 or size % 64:
+                    return set()
+                fh.seek(off)
+                data = fh.read(size)
+            return {data[i:i + 56].split(b"\0", 1)[0].decode("latin-1").lower()
+                    for i in range(0, len(data), 64)}
+        with zipfile.ZipFile(path) as z:
+            return {n.lower() for n in z.namelist()}
+    except (OSError, ValueError, struct.error, zipfile.BadZipFile):
+        return set()
+
+
+def _is_ours(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            return HOOK_MARK in fh.readline()
+    except OSError:
+        return False
+
+
+def mod_has_fte_reload_trigger(gamedir_path):
+    """True if the mod itself ships quake.rc/hexen.rc/default.cfg/server.cfg
+    (loose or in a .pak/.pk3, any case). Our own quake.rc doesn't count."""
+    import os
+    try:
+        names = os.listdir(gamedir_path)
+    except OSError:
+        return False
+    for n in names:
+        full = os.path.join(gamedir_path, n)
+        if n.lower() in FTE_RELOAD_TRIGGERS and os.path.isfile(full) and not _is_ours(full):
+            return True
+        if n.lower().endswith((".pak", ".pk3")) and os.path.isfile(full):
+            if _archive_names(full) & set(FTE_RELOAD_TRIGGERS):
+                return True
+    return False
+
+
+def _write_hook(gamedir_path, name, text):
+    import os
+    path = os.path.join(gamedir_path, name)
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text.replace("\n", "\r\n"))
+    return path
+
+
+def ensure_switch_hook(gamedir_path, client):
+    """Make a server-driven switch into this gamedir run autoexec.cfg -> binds.cfg.
+
+    client is "FTE" or "unezQuake" (the client_dirs label). FTE: write quake.rc
+    only when the mod has no reload trigger of its own (and drop a stale one of
+    ours if the mod now ships one). unezQuake: write frontend.cfg, or add the exec
+    line to a mod-shipped one. Idempotent. Returns the path written, or None.
+    """
+    import os
+    if not os.path.isdir(gamedir_path):
+        return None
+    if client == "FTE":
+        ours = [n for n in _find_ci(gamedir_path, "quake.rc")
+                if _is_ours(os.path.join(gamedir_path, n))]
+        if mod_has_fte_reload_trigger(gamedir_path):
+            for n in ours:
+                os.remove(os.path.join(gamedir_path, n))
+            return None
+        if _find_ci(gamedir_path, "quake.rc") and not ours:
+            return None  # mod's own quake.rc (never overwrite)
+        return _write_hook(gamedir_path, "quake.rc", FTE_QUAKE_RC)
+    if client == "unezQuake":
+        names = _find_ci(gamedir_path, "frontend.cfg")
+        theirs = [n for n in names if not _is_ours(os.path.join(gamedir_path, n))]
+        if not theirs:
+            return _write_hook(gamedir_path, "frontend.cfg", UNEZ_FRONTEND_CFG)
+        path = os.path.join(gamedir_path, theirs[0])
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            old = fh.read()
+        if not any(l.strip().lower() == "exec autoexec.cfg" for l in old.splitlines()):
+            with open(path, "a", encoding="utf-8", newline="") as fh:
+                fh.write(("" if old.endswith("\n") or not old else "\r\n") +
+                         "// Based Quake Installer: run autoexec.cfg on server switch\r\n"
+                         "exec autoexec.cfg\r\n")
+        return path
+    return None
+
+
 def ensure_autoexec_execs_binds(autoexec_path, text_if_new=None):
     """Back-compat wrapper: merge the gamedir autoexec. True if exec line was added."""
     import os

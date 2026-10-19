@@ -184,7 +184,18 @@ def write_mod_configs(opts, rep, result):
         auto = binds_mods.merge_mod_autoexec(target)
         if auto not in result.cfg_files:
             result.cfg_files.append(auto)
+        hook = binds_mods.ensure_switch_hook(target, label)
+        if hook and hook not in result.cfg_files:
+            result.cfg_files.append(hook)
+    # unezQuake: going back to a base server re-runs the base autoexec (unbindall).
+    if os.path.isdir(opts.unez_dir):
+        qw = os.path.join(opts.unez_dir, "qw")
+        os.makedirs(qw, exist_ok=True)
+        hook = binds_mods.ensure_switch_hook(qw, "unezQuake")
+        if hook and hook not in result.cfg_files:
+            result.cfg_files.append(hook)
     rep.log("  mod gamedirs: autoexec.cfg runs exec based.cfg (+ mod's own) + exec binds.cfg")
+    rep.log("  mod gamedirs: binds also load when a server switches you into the mod")
 
 
 def write_configs(opts, rep, result):

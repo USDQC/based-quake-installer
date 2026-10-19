@@ -202,6 +202,7 @@ Many mods add their own commands, such as throwing grenades in Team Fortress or 
 - Click a box and press a key, the same way as on the Custom binds tab; **✕** clears one box. Fill in only the ones you want. **Blank = skip.**
 - Your choices are saved into that mod's own folder as **`binds.cfg`**, in every client that has the mod (a mod with nothing filled in gets an empty `binds.cfg`).
 - Every mod folder's `autoexec.cfg` runs `exec based.cfg` first (your name, Custom binds and look from `id1`), then the mod's own autoexec lines, then `exec binds.cfg`. So Mod binds are **added on top of** your Custom binds, and a mod's own settings still apply.
+- Mod binds also load when a server switches you into the mod (for example, joining a Thunderwalker server from the base game). For that, FTE mod folders that don't ship their own `quake.rc` or `default.cfg` get a small `quake.rc`, and unezQuake mod folders get a `frontend.cfg`. Going back to a base server puts your normal binds back.
 - If a mod bind uses a key that a Custom bind already uses (say Tab for Team Fortress *Inventory*), both are kept: the mod bind wins inside that mod only, and the log notes it. Everywhere else the key keeps its Custom bind.
 - If a page has more boxes than fit, scroll it (scroll bar or mouse wheel).
 
@@ -472,6 +473,8 @@ You can also switch mods from inside the game by typing `gamedir fortress` in th
 | `unezQuake\ezquake\sb\sources.txt` | the server browser's list of master servers (6.4) | Install / Update / Update configs only (merged, never wiped) |
 | `<client>\<gamedir>\autoexec.cfg` | `exec based.cfg`, then the mod's own autoexec lines (kept), then `exec binds.cfg` | Install / Update configs only |
 | `<client>\<gamedir>\binds.cfg` | the Mod binds you filled in for that mod | Install / Update configs only |
+| `FTE\<gamedir>\quake.rc` | runs `autoexec.cfg` when a server switches FTE into the mod (only for mods without their own `quake.rc` / `default.cfg`) | Install / Update configs only |
+| `unezQuake\<gamedir>\frontend.cfg`, `unezQuake\qw\frontend.cfg` | runs `autoexec.cfg` when a server switches unezQuake into that folder | Install / Update configs only |
 | `FTE\default.fmf` | FTE's startup manifest, including `disablehomedir 1` | Install (patched, never replaced if present) |
 
 Because Quake looks in `id1` for any file a mod folder doesn't have, `exec based.cfg` inside a mod folder finds your `id1\based.cfg`, so your name, binds and look apply in every `-game`. A mod that ships its own `AUTOEXEC.CFG` (AirQuake does) keeps its lines; they're merged into one lowercase `autoexec.cfg`.

@@ -235,6 +235,7 @@ def _install_binds_only(spec, targets, log):
             with open(binds_path, "w", encoding="utf-8", newline="") as fh:
                 fh.write(text)
         binds_mods.merge_mod_autoexec(target)
+        binds_mods.ensure_switch_hook(target, label)
         log("  OK: %s -> %s (%s, binds only; server-side mod)" % (spec["title"], target, label))
     return "binds only (server-side mod)"
 

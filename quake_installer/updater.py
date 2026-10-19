@@ -192,9 +192,10 @@ def apply_updates(opts, items, rep, cancel_event=None):
                     # Newly added gamedirs need the usual autoexec merge + binds.cfg
                     # (never overwrites an existing binds.cfg).
                     from . import binds_mods
-                    for _label, target in modlib.client_dirs(spec, opts.fte_dir,
-                                                             opts.unez_dir):
+                    for label, target in modlib.client_dirs(spec, opts.fte_dir,
+                                                            opts.unez_dir):
                         binds_mods.merge_mod_autoexec(target)
+                        binds_mods.ensure_switch_hook(target, label)
                 updated.append(item)
                 manifest.save(opts.root, man)  # save as we go
             except download.Cancelled:
