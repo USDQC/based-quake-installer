@@ -214,10 +214,10 @@ class IndexAndCompareTests(unittest.TestCase):
                 continue
             self.assertEqual(len(m["sha256"]), 64)
             self.assertGreater(m["size"], 0)
-            if mods.is_pack(m):  # Drive link comes via mods.json until pasted in
+            if mods.is_pack(m):
                 self.assertEqual(m["file"], m["key"] + ".zip")
-                continue
-            self.assertEqual(m["file"], m["gamedir"] + ".zip")
+            else:
+                self.assertEqual(m["file"], m["gamedir"] + ".zip")
             self.assertEqual(drive.file_id(m["url"]) is not None, True, m["key"])
             self.assertFalse(any(k in m for k in ("mirror_steps", "moddb_files")))
 

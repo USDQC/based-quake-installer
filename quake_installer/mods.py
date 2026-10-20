@@ -118,11 +118,12 @@ DRIVE_FILES = {
     "grq": {"sha256": "0f09e1f88c195032b1a1083dc74cdab0cb50210589b4b74b27513270552e4221",
            "size": 632122,
            "url": "https://drive.google.com/file/d/1Q5R07Oozd0VtWS1_mlTlcrQnyNbKP7M4/view"},
-    # Packs: link comes from mods.json on Drive until a real one is pasted here.
     "skins": {"sha256": "2a7637359bb5e743da9e7f8742b39a2ae1e29f11d113536aec3ae6d6aab437e1",
-              "size": 664952},
+              "size": 664952,
+              "url": "https://drive.google.com/file/d/1L4NKfzkWWhKY9qRUWLgdpXZA-XePOiWs/view"},
     "sprays": {"sha256": "e2e991bcbe06414ec901b5550fdf0bf2994613bf409cdfddaee8120848c79536",
-               "size": 231946},
+               "size": 231946,
+               "url": "https://drive.google.com/file/d/1WsydUDZwaZzPTwvxCIzxpEta0PyPFCkx/view"},
 }
 for _m in MODS:
     if not _m.get("binds_only"):

@@ -43,7 +43,8 @@ class PackTests(unittest.TestCase):
         self.assertEqual(set(s["clients"]), {"fte", "unez"})
         self.assertEqual((p["gamedir"], p["subdir"], p["file"]), ("qw", "sprays", "sprays.zip"))
         self.assertEqual(p["clients"], ["unez"])
-        self.assertEqual(s["url"], mods.PLACEHOLDER)
+        self.assertIn("1L4NKfzkWWhKY9qRUWLgdpXZA-XePOiWs", s["url"])
+        self.assertIn("1WsydUDZwaZzPTwvxCIzxpEta0PyPFCkx", p["url"])
 
     def test_skins_both_clients_keep_user_files(self):
         for root in (self.fte, self.unez):
@@ -110,7 +111,7 @@ class PackTests(unittest.TestCase):
         by = {m["key"]: m for m in specs}
         self.assertEqual(by["skins"]["url"], url)
         self.assertEqual(by["skins"]["sha256"], "a" * 64)
-        self.assertEqual(by["sprays"]["url"], mods.PLACEHOLDER)
+        self.assertEqual(by["sprays"]["url"], self.specs["sprays"]["url"])
         self.assertEqual(by["sprays"]["sha256"], self.specs["sprays"]["sha256"])
         self.assertTrue(mods.is_pack(by["skins"]))
 
@@ -128,6 +129,7 @@ class PackTests(unittest.TestCase):
         for k in ("skins", "sprays"):
             self.assertEqual(by[k]["sha256"], self.specs[k]["sha256"])
             self.assertEqual(by[k]["size"], self.specs[k]["size"])
+            self.assertEqual(by[k]["url"], self.specs[k]["url"])
         self.assertEqual(len(by), 11)
 
     def test_based_cfg_spray_image(self):
