@@ -1,6 +1,6 @@
 # Based Quake Installer
 
-Installs unezQuake and FTE with a set of classic QuakeWorld mods, binds already set up.
+Installs unezQuake and FTE with a set of classic QuakeWorld mods, binds already set up, so getting in and playing with USDQC is simple.
 
 ## Features
 
