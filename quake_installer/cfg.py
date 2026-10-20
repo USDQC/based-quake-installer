@@ -52,7 +52,12 @@ BIND_ACTIONS = [
     ("impulse7", "impulse 7", "Weapon 7 (rocket)"),
     ("impulse8", "impulse 8", "Weapon 8 (shaft)"),
     ("impulse0", "impulse 0", "Weapon 0"),
+    # --- unezQuake only (cl_sprays.c: Cmd_AddCommand("+spray") in 2.1.1) ---
+    ("spray", "+spray", "Spray (unezQuake only)"),
 ]
+
+# Actions written only into unezQuake's based.cfg (FTE has no such command).
+UNEZ_ONLY_ACTIONS = {"spray"}
 
 ACTION_BY_ID = {a[0]: a for a in BIND_ACTIONS}
 
@@ -321,7 +326,7 @@ def _fmt_bind(key, cmd):
     return "bind %s %s" % (key, cmd)
 
 
-def build_binds(binds):
+def build_binds(binds, client=None):
     """Return ordered [(section_title, [(key, cmd), ...])].
 
     Player binds first (blank actions skipped). Each key appears once: if two
@@ -329,6 +334,8 @@ def build_binds(binds):
     appended only for keys the player did not already use.
     """
     cleaned = clean_binds(binds)
+    if client == CLIENT_FTE:
+        cleaned = {k: v for k, v in cleaned.items() if k not in UNEZ_ONLY_ACTIONS}
     seen = set()
     player = []
     for action_id, cmd, _label in BIND_ACTIONS:
@@ -371,6 +378,8 @@ def render_autoexec(client, player_name, binds, look):
     look_label = "OpenGL look" if look_key == "gl" else "Software-rendered look"
 
     bound = clean_binds(binds)
+    if client == CLIENT_FTE:
+        bound = {k: v for k, v in bound.items() if k not in UNEZ_ONLY_ACTIONS}
     n_bound = len(bound)
 
     lines = [
@@ -384,7 +393,7 @@ def render_autoexec(client, player_name, binds, look):
         "// === binds (blank fields were left unbound) ===",
         "unbindall",
     ]
-    for title, pairs in build_binds(bound):
+    for title, pairs in build_binds(bound, client):
         lines.append("")
         lines.append("// " + title)
         for key, cmd in pairs:

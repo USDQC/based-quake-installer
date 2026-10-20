@@ -364,12 +364,13 @@ class InstallerApp(object):
         canvas.bind("<Configure>", _on_configure)
 
         mid = (len(cfg.BIND_ACTIONS) + 1) // 2
+        label_w = max(18, max(len(a[2]) for a in cfg.BIND_ACTIONS) + 2)
         for i, (action_id, _cmd, label) in enumerate(cfg.BIND_ACTIONS):
             col = 0 if i < mid else 3
             row = i if i < mid else i - mid
             var = tk.StringVar(value="")
             self.bind_vars[action_id] = var
-            ttk.Label(inner, text=label + ":", width=18, anchor="w").grid(
+            ttk.Label(inner, text=label + ":", width=label_w, anchor="w").grid(
                 row=row, column=col, sticky="w", padx=(0, 4), pady=1)
             box = KeyBox(inner, var, width=14)
             box.grid(row, col + 1, gap=16)
