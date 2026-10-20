@@ -1,3 +1,3 @@
 """Based Quake Installer (stdlib-only: tkinter, urllib, zipfile)."""
 
-__version__ = "1.6.7"
+__version__ = "1.6.8"

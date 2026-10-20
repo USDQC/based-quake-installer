@@ -1,6 +1,6 @@
 @page { size: A4; margin: 20mm 18mm 20mm 18mm;
   @bottom-center { content: counter(page); font: 9pt "DejaVu Sans", sans-serif; color: #777; }
-  @top-right { content: "Based Quake Installer v1.6.7 · User Manual"; font: 8pt "DejaVu Sans", sans-serif; color: #999; } }
+  @top-right { content: "Based Quake Installer v1.6.8 · User Manual"; font: 8pt "DejaVu Sans", sans-serif; color: #999; } }
 @page :first { @bottom-center { content: none; } @top-right { content: none; } }
 @page toc { @bottom-center { content: none; } }
 body { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; font-size: 10pt; line-height: 1.45; color: #222; }
