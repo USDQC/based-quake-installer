@@ -1,7 +1,7 @@
 <div class="titlepage">
 <div class="tp-kicker">User Manual</div>
 <h1 class="tp-title">Based Quake Installer</h1>
-<div class="tp-version">Version 1.6.6</div>
+<div class="tp-version">Version 1.6.7</div>
 <div class="tp-sub">Set up unezQuake and FTE, the Quake shareware data, and ten classic mods in one go, with your name, look and key binds already written.</div>
 <img class="tp-shot" src="img/main-window.png" alt="Based Quake Installer main window">
 <div class="tp-foot">Written for Quake and QuakeWorld players · Windows · Linux<br>Installer by USDQC · Manual date: October 2026</div>
@@ -83,7 +83,7 @@ The exe takes a few seconds to open, because it unpacks itself to a temporary fo
 The easy way is the `.deb` package. Open a terminal in the folder where you downloaded it and run:
 
 ```
-sudo apt install ./based-quake-installer_1.6.6_all.deb
+sudo apt install ./based-quake-installer_1.6.7_all.deb
 ```
 
 This pulls in `python3` and `python3-tk` automatically and adds a **Based Quake Installer** entry to your applications menu. You can also start it from a terminal with `based-quake-installer`. The program itself lives in `/opt/based-quake-installer`.
