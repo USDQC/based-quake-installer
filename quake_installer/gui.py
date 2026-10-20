@@ -461,10 +461,10 @@ class InstallerApp(object):
         self.btn_check.pack(side="left", padx=(0, 6))
         self.btn_cancel = ttk.Button(b, text="Cancel", command=self._cancel, state="disabled")
         self.btn_cancel.pack(side="left")
-        self.btn_folder = ttk.Button(b, text="Open folder", command=self._open_folder)
-        self.btn_folder.pack(side="right")
+        self.btn_folder = ttk.Button(b, text="Open game folder", command=self._open_folder)
+        self.btn_folder.pack(side="left", padx=6)
         self.btn_self = ttk.Button(b, text="Update installer", command=self._start_self_check)
-        self.btn_self.pack(side="right", padx=6)
+        self.btn_self.pack(side="right")
         self.lbl_self = ttk.Label(b, textvariable=self.var_self, foreground="#1a4f8b")
         self.lbl_self.pack(side="right", padx=6)
 
