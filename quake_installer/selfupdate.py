@@ -254,9 +254,10 @@ def apply_exe(zip_path, exe_path):
         with z.open(sorted(members, key=len)[0]) as src, open(new, "wb") as dst:
             shutil.copyfileobj(src, dst)
     with open(new, "rb") as fh:
-        if fh.read(2) != b"MZ":
-            os.remove(new)
-            raise SelfUpdateError("The new exe is not a Windows program.")
+        magic = fh.read(2)
+    if magic != b"MZ":  # closed first: Windows can't delete an open file
+        os.remove(new)
+        raise SelfUpdateError("The new exe is not a Windows program.")
     if os.path.exists(old):
         try:
             os.remove(old)

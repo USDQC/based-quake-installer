@@ -117,10 +117,11 @@ class AssetAndKindTests(unittest.TestCase):
             self.assertEqual(k(frozen=False, is_windows=True, base_dir=t), su.KIND_SOURCE_WIN)
             lst = os.path.join(t, "pkg.list")
             open(lst, "w").close()
-            self.assertEqual(k(frozen=False, is_windows=False, base_dir=su.DEB_DIR,
-                               deb_list=lst), su.KIND_DEB)
-            self.assertEqual(k(frozen=False, is_windows=False, base_dir=su.DEB_DIR,
-                               deb_list=lst + ".missing"), su.KIND_TARBALL)
+            if os.name != "nt":  # /opt path; the .deb kind only exists on Linux
+                self.assertEqual(k(frozen=False, is_windows=False, base_dir=su.DEB_DIR,
+                                   deb_list=lst), su.KIND_DEB)
+                self.assertEqual(k(frozen=False, is_windows=False, base_dir=su.DEB_DIR,
+                                   deb_list=lst + ".missing"), su.KIND_TARBALL)
             os.mkdir(os.path.join(t, ".git"))
             self.assertEqual(k(frozen=False, is_windows=False, base_dir=t), su.KIND_GIT)
         finally:
