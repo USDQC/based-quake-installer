@@ -231,6 +231,8 @@ m_pitch 0.022
 # Cvar names differ per engine. A real unezQuake 2.1 run reported "Unknown command" for
 # mlook_enabled / r_particles / r_particle_type / anisotropicfilter_extent; the ezQuake
 # names are freelook / r_drawparticles / gl_anisotropy.
+SPRAY_IMAGE = "usdqc"  # qw/sprays/usdqc.png from the spray pack
+
 CLIENT_BASE = {
     "fte": "mlook_enabled 1",
     # sb/sources.txt is written by sb_sources.write_sources(); ezQuake only auto-ticks
@@ -238,7 +240,11 @@ CLIENT_BASE = {
     # Sources load before configs run, so these work from based.cfg.
     # crosshair: unezQuake's default is 4; 1 is the classic "+".
     "unez": "freelook 1\ncrosshair 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
-            + "\n".join(sb_sources.sourcemark_lines()),
+            + "\n".join(sb_sources.sourcemark_lines())
+            # Sprays (unezQuake 2.1.1 cl_sprays.c): images load from qw/sprays
+            # (cl_spray_image_path); cl_spray_image defaults to "spray", which the spray
+            # pack doesn't ship, so point it at the pack's image. Use with +spray.
+            + "\n\n// === sprays: qw/sprays (bind a key to +spray) ===\ncl_spray_image " + SPRAY_IMAGE,
 }
 
 LOOK_BLOCKS = {

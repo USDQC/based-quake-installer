@@ -197,7 +197,7 @@ class ModTests(unittest.TestCase):
         keys = {m["key"]: m for m in mods.load_specs()}
         self.assertEqual(set(keys), {
             "airquake", "painkeep", "hh", "fortress", "thunderwalker", "arena",
-            "fvf", "rally", "grq", "runequake"})
+            "fvf", "rally", "grq", "runequake", "skins", "sprays"})
         self.assertEqual(set(keys["runequake"]["clients"]), {"fte", "unez"})
         self.assertEqual(keys["runequake"]["gamedir"], "runequake")
         self.assertEqual(set(keys["grq"]["clients"]), {"fte", "unez"})

@@ -440,7 +440,8 @@ class InstallerApp(object):
         note_row = len(self.mod_specs)
         note = ttk.Label(
             m, foreground="#555", wraplength=280, justify="left",
-            text="Installed with the engines. AirQuake, Quake Rally, and FvF are FTE-only."
+            text="Installed with the engines. AirQuake, Quake Rally, and FvF are FTE-only; "
+                 "the spray pack is unezQuake-only."
         )
         note.grid(row=note_row, column=0, sticky="ew", pady=(8, 0))
         # Wrap to the panel's real width so the note never gets clipped.

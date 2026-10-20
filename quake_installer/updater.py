@@ -143,7 +143,7 @@ def _mod_present(root, spec):
     from .constants import FTE_DIRNAME, UNEZ_DIRNAME
     for label, target in modlib.client_dirs(spec, os.path.join(root, FTE_DIRNAME),
                                            os.path.join(root, UNEZ_DIRNAME)):
-        if modlib._has_game_files(target):
+        if modlib.is_present(spec, target):
             return True
     return False
 
@@ -192,8 +192,9 @@ def apply_updates(opts, items, rep, cancel_event=None):
                     # Newly added gamedirs need the usual autoexec merge + binds.cfg
                     # (never overwrites an existing binds.cfg).
                     from . import binds_mods
-                    for label, target in modlib.client_dirs(spec, opts.fte_dir,
-                                                            opts.unez_dir):
+                    for label, target in ([] if modlib.is_pack(spec) else
+                                          modlib.client_dirs(spec, opts.fte_dir,
+                                                             opts.unez_dir)):
                         binds_mods.merge_mod_autoexec(target)
                         binds_mods.ensure_switch_hook(target, label)
                 updated.append(item)

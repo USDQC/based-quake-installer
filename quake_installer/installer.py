@@ -152,6 +152,8 @@ def installed_mod_dirs(opts):
     """[(spec, label, target)] for every configured mod whose gamedir exists."""
     out = []
     for spec in modlib.load_specs():
+        if modlib.is_pack(spec):
+            continue  # qw/skins etc.: no mod configs in qw/
         for label, target in modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
             if os.path.isdir(target):
                 out.append((spec, label, target))
@@ -467,7 +469,7 @@ def installed_mod_specs(opts):
     out = []
     for spec in modlib.load_specs():
         for _label, target in modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
-            if modlib._has_game_files(target):
+            if modlib.is_present(spec, target):
                 out.append(spec)
                 break
     return out

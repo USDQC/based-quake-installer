@@ -73,7 +73,21 @@ MODS = [
      "binds_only": True, "needs_registered": False,
      "note": "Server-side rune DM mod; only binds are set up. Join a Rune Quake "
              "server with -game runequake."},
+    # Packs: not mods. Files go into an existing folder (qw/skins, qw/sprays) and only
+    # add/overwrite the pack's own files; nothing else in that folder is touched.
+    {"key": "skins", "kind": "pack", "clients": ["fte", "unez"], "title": "Skin pack",
+     "gamedir": "qw", "subdir": "skins", "version": "1", "needs_registered": False,
+     "note": "QuakeWorld player skins into qw/skins (both clients)."},
+    {"key": "sprays", "kind": "pack", "clients": ["unez"], "title": "Spray pack",
+     "gamedir": "qw", "subdir": "sprays", "version": "1", "needs_registered": False,
+     "note": "Spray images into qw/sprays (unezQuake only; bind a key to +spray)."},
 ]
+
+PACK_EXTS = (".pcx", ".png", ".tga", ".jpg", ".jpeg")
+
+
+def is_pack(spec):
+    return spec.get("kind") == "pack"
 
 # Drive zips as built by packaging/drive/build_drive_zips.py (filled in below).
 DRIVE_FILES = {
@@ -104,10 +118,16 @@ DRIVE_FILES = {
     "grq": {"sha256": "0f09e1f88c195032b1a1083dc74cdab0cb50210589b4b74b27513270552e4221",
            "size": 632122,
            "url": "https://drive.google.com/file/d/1Q5R07Oozd0VtWS1_mlTlcrQnyNbKP7M4/view"},
+    # Packs: link comes from mods.json on Drive until a real one is pasted here.
+    "skins": {"sha256": "2a7637359bb5e743da9e7f8742b39a2ae1e29f11d113536aec3ae6d6aab437e1",
+              "size": 664952},
+    "sprays": {"sha256": "e2e991bcbe06414ec901b5550fdf0bf2994613bf409cdfddaee8120848c79536",
+               "size": 231946},
 }
 for _m in MODS:
     if not _m.get("binds_only"):
-        _m.update({"file": _m["gamedir"] + ".zip", "url": PLACEHOLDER})
+        _m.update({"file": (_m["key"] if is_pack(_m) else _m["gamedir"]) + ".zip",
+                   "url": PLACEHOLDER})
         _m.update(DRIVE_FILES.get(_m["key"], {}))
 
 
@@ -117,7 +137,7 @@ class ModError(Exception):
 
 # Fields a mods.json entry may set on a built-in mod.
 INDEX_FIELDS = ("title", "gamedir", "version", "sha256", "size", "clients", "url", "file",
-                "note", "needs_registered")
+                "note", "needs_registered", "kind", "subdir")
 
 
 def index_entries(data):
@@ -209,6 +229,39 @@ def _has_game_files(folder):
     return any(n in ("progs.dat", "qwprogs.dat", "csprogs.dat", "pak0.pak", "pak1.pak",
                      "pak2.pak") or
                n.endswith((".pk3", ".pak")) or n == "maps" for n in names)
+
+
+def is_present(spec, target):
+    """Mod: game data in target. Pack: any pack-type file in target/<subdir>."""
+    if is_pack(spec):
+        d = os.path.join(target, spec["subdir"])
+        try:
+            return any(n.lower().endswith(PACK_EXTS) for n in os.listdir(d))
+        except OSError:
+            return False
+    return _has_game_files(target)
+
+
+def _install_pack(spec, payload, targets, log, fname):
+    """Copy payload/<subdir>/ files into each target/<subdir>/ (add/overwrite only)."""
+    sub = spec["subdir"]
+    src = os.path.join(payload, sub)
+    files = []
+    if os.path.isdir(src):
+        files = [f for f in os.listdir(src)
+                 if os.path.isfile(os.path.join(src, f)) and f.lower().endswith(PACK_EXTS)]
+    if not files:
+        raise ModError("%s: no %s/ images in %s" % (spec["title"], sub, fname))
+    for label, target in targets:
+        dst = os.path.join(target, sub)
+        os.makedirs(dst, exist_ok=True)
+        for f in sorted(files):
+            try:
+                shutil.copy2(os.path.join(src, f), os.path.join(dst, f))
+            except PermissionError:
+                raise ModError("Cannot overwrite %s (is the game running?)"
+                               % os.path.join(dst, f))
+        log("  OK: %s -> %s (%s, %d files)" % (spec["title"], dst, label, len(files)))
 
 
 def client_dirs(spec, fte_dir, unez_dir):
@@ -308,9 +361,11 @@ def install_mod(spec, fte_dir, work_dir, progress=None, cancel_event=None, log=p
         raise ModError("%s: %s is not a valid zip (%s)" % (spec["title"], fname, exc))
     payload = _payload_dir(stage, gamedir)
     extract.lowercase_tree(payload, incoming_wins=True)  # defensive; zips are lowercase
-    if not _has_game_files(payload):
+    if is_pack(spec):
+        _install_pack(spec, payload, targets, log, fname)
+    elif not _has_game_files(payload):
         raise ModError("%s: no progs.dat / pak files in %s" % (spec["title"], fname))
-    for label, target in targets:
+    for label, target in ([] if is_pack(spec) else targets):
         os.makedirs(target, exist_ok=True)
         extract.copy_tree_over(payload, target, protect=protect)
         # Old installs (<=1.6.1) left PAK0.PAK / GFX/ etc.; the fresh lowercase copy wins.
