@@ -128,8 +128,8 @@ class ModsOnlyTests(Fixture):
         self.assertEqual(_r(os.path.join(self.unez, "unezquake")), "bin")
         self.assertTrue(os.path.isfile(os.path.join(self.unez, "qw", "skins", "base.pcx")))
         # no UnezQuake/ FTE/ subfolders created
-        self.assertFalse(os.path.exists(os.path.join(self.unez, "FTE")))
-        self.assertFalse(os.path.exists(os.path.join(self.unez, "unezQuake")))
+        self.assertFalse(os.path.isdir(os.path.join(self.unez, "FTE")))
+        self.assertFalse(os.path.isdir(os.path.join(self.unez, "unezQuake")))
         self.assertTrue(os.path.isfile(manifest.path_for(self.unez)))
 
     def test_user_cfgs_not_overwritten(self):
@@ -363,7 +363,9 @@ class FteHomeDetectTests(unittest.TestCase):
         os.makedirs(os.path.join(self.t, "prof", "Saved Games", "afterquake"))
         d = existing.detect_fte_config(self.fte, env=env, platform="windows")
         self.assertEqual(d.mode, existing.MODE_HOME)
-        self.assertEqual(d.write_root, os.path.join(self.t, "prof", "Saved Games", "afterquake"))
+        self.assertEqual(os.path.normcase(d.write_root),
+                         os.path.normcase(os.path.join(self.t, "prof", "Saved Games",
+                                                       "afterquake")))
 
 
 class FolderCheckTests(Fixture):
