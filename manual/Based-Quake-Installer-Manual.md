@@ -1,7 +1,7 @@
 <div class="titlepage">
 <div class="tp-kicker">User Manual</div>
 <h1 class="tp-title">Based Quake Installer</h1>
-<div class="tp-version">Version 1.6.8</div>
+<div class="tp-version">Version 1.6.9</div>
 <div class="tp-sub">Set up unezQuake and FTE, the Quake shareware data, and ten classic mods in one go, with your name, look and key binds already written.</div>
 <img class="tp-shot" src="img/main-window.png" alt="Based Quake Installer main window">
 <div class="tp-foot">Written for Quake and QuakeWorld players · Windows · Linux<br>Installer by USDQC · Manual date: October 2026</div>
@@ -83,7 +83,7 @@ The exe takes a few seconds to open, because it unpacks itself to a temporary fo
 The easy way is the `.deb` package. Open a terminal in the folder where you downloaded it and run:
 
 ```
-sudo apt install ./based-quake-installer_1.6.8_all.deb
+sudo apt install ./based-quake-installer_1.6.9_all.deb
 ```
 
 This pulls in `python3` and `python3-tk` automatically and adds a **Based Quake Installer** entry to your applications menu. You can also start it from a terminal with `based-quake-installer`. The program itself lives in `/opt/based-quake-installer`.
@@ -223,9 +223,17 @@ The panel on the right just shows the mods that will be installed. There are no 
 | **Check for updates** | Looks online for newer client builds or changed mods (via `mods.json` on Google Drive) and shows a list. From that list, **Update** downloads only what changed. See Chapter 7. |
 | **Update installer** | Checks for a newer version of this installer program and offers to update it. Games, mods and configs aren't touched. See 7.1. |
 | **Cancel** | Stops a running install or update. It's only active while something is running. |
-| **Open folder** | Opens your install folder in Explorer or your file manager. |
+| **Open game folder** | Opens your install folder in Explorer or your file manager. It sits on the left, next to **Cancel**. |
 
 While a job is running, the other controls are greyed out. If you close the window mid-install, the installer asks whether to cancel and quit.
+
+### Mods-only mode
+
+Already have unezQuake and/or FTE installed? Choose **Mods-only mode** and pick the folder for each client you have. The installer adds the mods, the binds and the gamedir-switch files, without touching your existing configs. If it can't tell where FTE keeps its home folder, it asks you.
+
+### Theme picker
+
+Choose between the **Classic** and **Dark** themes for the installer window.
 
 ## 3.7 Progress and log
 
