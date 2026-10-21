@@ -11,7 +11,8 @@ import os
 import sys
 
 FILENAME = "settings.json"
-KEYS = ("root", "player_name", "look", "binds", "mod_binds", "check_installer_updates")
+KEYS = ("root", "player_name", "look", "binds", "mod_binds", "check_installer_updates",
+        "install_mode", "unez_path", "fte_path", "fte_cfg_choice", "theme")
 
 
 def settings_dir():

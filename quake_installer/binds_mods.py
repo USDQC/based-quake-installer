@@ -266,13 +266,15 @@ def _find_ci(folder, name):
         return []
 
 
-def merge_mod_autoexec(gamedir_path):
+def merge_mod_autoexec(gamedir_path, extra_dirs=()):
     """Make {gamedir}/autoexec.cfg run our shared cfg first and mod binds last.
 
     The mod's own autoexec contents (any filename case, e.g. AirQuake's AUTOEXEC.CFG)
     are preserved in the middle, so a mod's own binds override the shared ones and
     the optional Mod binds tab overrides both. Ends with a single lowercase
     autoexec.cfg. Idempotent. Returns the path written.
+    extra_dirs: other folders of the same gamedir whose autoexec.cfg this one
+    shadows (FTE home dir mode: the install's copy); read, never changed.
     """
     import os
     os.makedirs(gamedir_path, exist_ok=True)
@@ -283,6 +285,10 @@ def merge_mod_autoexec(gamedir_path):
         with open(os.path.join(gamedir_path, n), "r", encoding="utf-8",
                   errors="replace") as fh:
             body_parts.append(fh.read().replace("\r\n", "\n"))
+    for d in extra_dirs or ():
+        for n in _find_ci(d, "autoexec.cfg"):
+            with open(os.path.join(d, n), "r", encoding="utf-8", errors="replace") as fh:
+                body_parts.insert(0, fh.read().replace("\r\n", "\n"))
     kept = []
     for part in body_parts:
         for line in part.split("\n"):
@@ -397,13 +403,15 @@ def _write_hook(gamedir_path, name, text):
     return path
 
 
-def ensure_switch_hook(gamedir_path, client):
+def ensure_switch_hook(gamedir_path, client, extra_dirs=()):
     """Make a server-driven switch into this gamedir run autoexec.cfg -> binds.cfg.
 
     client is "FTE" or "unezQuake" (the client_dirs label). FTE: write quake.rc
     only when the mod has no reload trigger of its own (and drop a stale one of
     ours if the mod now ships one). unezQuake: write frontend.cfg, or add the exec
     line to a mod-shipped one. Idempotent. Returns the path written, or None.
+    extra_dirs: FTE home-dir mode passes the install's gamedir here (game data
+    lives there, the hook goes into the home gamedir FTE searches first).
     """
     import os
     if not os.path.isdir(gamedir_path):
@@ -411,7 +419,8 @@ def ensure_switch_hook(gamedir_path, client):
     if client == "FTE":
         ours = [n for n in _find_ci(gamedir_path, "quake.rc")
                 if _is_ours(os.path.join(gamedir_path, n))]
-        if mod_has_fte_reload_trigger(gamedir_path):
+        if mod_has_fte_reload_trigger(gamedir_path) or \
+                any(mod_has_fte_reload_trigger(d) for d in extra_dirs or ()):
             for n in ours:
                 os.remove(os.path.join(gamedir_path, n))
             return None

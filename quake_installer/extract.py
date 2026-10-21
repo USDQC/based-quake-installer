@@ -67,7 +67,23 @@ def flatten_root(stage_dir):
     return stage_dir
 
 
-def copy_tree_over(src, dst, protect=(), skipped=None):
+def normalize_dir_case(parent, name, log=None):
+    """Linux: rename an existing case-variant of parent/name (e.g. PainKeep/) to
+    the lowercase name the engines look up. Merges if both exist. Returns path."""
+    want = os.path.join(parent, name)
+    if os.name == "nt" or not os.path.isdir(parent) or os.path.isdir(want):
+        return want
+    for n in os.listdir(parent):
+        p = os.path.join(parent, n)
+        if n != name and n.lower() == name.lower() and os.path.isdir(p):
+            os.rename(p, want)
+            if log:
+                log("  renamed %s -> %s (engines look up lowercase)" % (p, want))
+            break
+    return want
+
+
+def copy_tree_over(src, dst, protect=(), skipped=None, ci=False):
     """Copy src/* into dst, overwriting files. Clear error if a file is locked.
 
     Files whose basename is in ``protect`` are not overwritten if they already exist
@@ -82,7 +98,10 @@ def copy_tree_over(src, dst, protect=(), skipped=None):
         for f in files:
             s = os.path.join(root, f)
             d = os.path.join(tdir, f)
-            if f.lower() in protect and os.path.exists(d):
+            exists = os.path.exists(d)
+            if ci and not exists and f.lower() in protect:
+                exists = any(n.lower() == f.lower() for n in os.listdir(tdir))
+            if f.lower() in protect and exists:
                 if skipped is not None:
                     skipped.append(d)
                 continue

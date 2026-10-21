@@ -271,9 +271,9 @@ def client_dirs(spec, fte_dir, unez_dir):
     clients = spec.get("clients") or ["fte"]
     out = []
     for c in clients:
-        if c == "fte":
+        if c == "fte" and fte_dir:
             out.append(("FTE", os.path.join(fte_dir, gamedir)))
-        elif c == "unez":
+        elif c == "unez" and unez_dir:
             out.append(("unezQuake", os.path.join(unez_dir, gamedir)))
     return out
 
@@ -324,12 +324,12 @@ def _payload_dir(stage, gamedir):
 
 def install_mod(spec, fte_dir, work_dir, progress=None, cancel_event=None, log=print,
                 local_file=None, unez_dir=None, meta_out=None, protect=(),
-                fetch=None):
+                fetch=None, ci_protect=False):
     """Download <gamedir>.zip from Drive, verify it, unzip into each declared client
     tree. local_file: an already downloaded copy of that same zip (still verified).
     meta_out (dict) receives {file,url,version,sha256,size}. Returns a source desc."""
     gamedir = spec["gamedir"]
-    targets = client_dirs(spec, fte_dir, unez_dir or fte_dir)
+    targets = client_dirs(spec, fte_dir, unez_dir if ci_protect else (unez_dir or fte_dir))
     if not targets:
         raise ModError("%s: no client trees declared" % spec["title"])
     if spec.get("binds_only"):
@@ -368,7 +368,7 @@ def install_mod(spec, fte_dir, work_dir, progress=None, cancel_event=None, log=p
         raise ModError("%s: no progs.dat / pak files in %s" % (spec["title"], fname))
     for label, target in ([] if is_pack(spec) else targets):
         os.makedirs(target, exist_ok=True)
-        extract.copy_tree_over(payload, target, protect=protect)
+        extract.copy_tree_over(payload, target, protect=protect, ci=ci_protect)
         # Old installs (<=1.6.1) left PAK0.PAK / GFX/ etc.; the fresh lowercase copy wins.
         extract.lowercase_tree(target, incoming_wins=False, log=log)
         if not _has_game_files(target):

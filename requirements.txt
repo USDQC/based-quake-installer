@@ -2,3 +2,7 @@
 # (tkinter, urllib, zipfile, hashlib, subprocess, threading).
 #
 # Build-time only (to make an .exe):  see requirements-build.txt
+#
+# Optional: sv-ttk (Sun Valley theme, MIT, by rdbende). A copy (2.6.1) is vendored
+# in quake_installer/vendor/sv_ttk, so nothing needs installing.
+sv-ttk==2.6.1

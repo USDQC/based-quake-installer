@@ -75,11 +75,14 @@ def platform_mismatch_note(root, running):
 
 def check_updates(root, platform, specs=None, log=print, head=download.head,
                   resolve_unez=clients.resolve_unez, resolve_fte=clients.resolve_fte,
-                  get_text=None):
+                  get_text=None, opts=None):
     """Return [UpdateItem]. Network errors become STATUS_ERROR items (never raise).
 
     Mods: mods.json is fetched from Drive (one stable link) and each mod's
-    version/sha256 is compared with what the manifest recorded."""
+    version/sha256 is compared with what the manifest recorded.
+    opts with existing=True (mods-only): the clients are the user's own, so only
+    mods/packs are checked, in opts.unez_dir / opts.fte_dir."""
+    existing = bool(opts is not None and getattr(opts, "existing", False))
     man = manifest.load(root)
     mismatch = bool(man.get("platform")) and man["platform"] != platform
     comps = man.get("components", {})
@@ -88,6 +91,8 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
 
     for comp, title, resolver in (("client:unez", "unezQuake (%s)" % label, resolve_unez),
                                   ("client:fte", "FTE (%s)" % label, resolve_fte)):
+        if existing:
+            continue  # user's own client: never updated by us
         if mismatch:
             items.append(UpdateItem(comp, title, manifest.STATUS_PLATFORM, comps.get(comp), None,
                                     "installed for %s; skipped"
@@ -114,6 +119,8 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
         log("  checking mods.json on Google Drive")
         specs, index_err = modlib.load_specs_online(log=log, get_text=get_text)
     for spec in specs:
+        if existing and not modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
+            continue  # needs a client that wasn't chosen
         if spec.get("binds_only"):
             continue  # server-side mod: nothing downloaded, nothing to update
         comp = "mod:" + spec["key"]
@@ -122,7 +129,7 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
         inst = comps.get(comp)
         if remote.get("error"):
             st = manifest.STATUS_ERROR
-        elif inst is None and not _mod_present(root, spec):
+        elif inst is None and not _mod_present(root, spec, opts if existing else None):
             st = manifest.STATUS_MISSING
         else:
             st = manifest.compare(inst or {}, remote)
@@ -139,10 +146,14 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
     return items
 
 
-def _mod_present(root, spec):
+def _mod_present(root, spec, opts=None):
     from .constants import FTE_DIRNAME, UNEZ_DIRNAME
-    for label, target in modlib.client_dirs(spec, os.path.join(root, FTE_DIRNAME),
-                                           os.path.join(root, UNEZ_DIRNAME)):
+    if opts is not None:
+        dirs = modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir)
+    else:
+        dirs = modlib.client_dirs(spec, os.path.join(root, FTE_DIRNAME),
+                                  os.path.join(root, UNEZ_DIRNAME))
+    for label, target in dirs:
         if modlib.is_present(spec, target):
             return True
     return False
@@ -151,6 +162,10 @@ def _mod_present(root, spec):
 def apply_updates(opts, items, rep, cancel_event=None):
     """Download + install only items that need it. Returns (updated, failed)."""
     from . import installer
+    existing = bool(getattr(opts, "existing", False))
+    if existing:
+        opts.root = installer.existing_manifest_root(opts)
+        items = [i for i in items if not i.component.startswith("client:")]
     todo = [i for i in items if i.needs_update]
     updated, failed = [], []
     if not todo:
@@ -186,7 +201,10 @@ def apply_updates(opts, items, rep, cancel_event=None):
                     src = modlib.install_mod(
                         spec, opts.fte_dir, work, progress=rep.progress,
                         cancel_event=cancel_event, log=rep.log, unez_dir=opts.unez_dir,
-                        meta_out=meta, protect=installer.PROTECTED_FILES)
+                        meta_out=meta,
+                        protect=(installer.EXISTING_PROTECTED if existing
+                                 else installer.PROTECTED_FILES),
+                        ci_protect=existing)
                     manifest.record(man, item.component, meta,
                                     extra={"source": src, "gamedir": spec["gamedir"]})
                     # Newly added gamedirs need the usual autoexec merge + binds.cfg
@@ -195,8 +213,10 @@ def apply_updates(opts, items, rep, cancel_event=None):
                     for label, target in ([] if modlib.is_pack(spec) else
                                           modlib.client_dirs(spec, opts.fte_dir,
                                                              opts.unez_dir)):
-                        binds_mods.merge_mod_autoexec(target)
-                        binds_mods.ensure_switch_hook(target, label)
+                        cdir = opts.cfg_dir_for(label, target) if existing else target
+                        extra = [target] if cdir != target else []
+                        binds_mods.merge_mod_autoexec(cdir, extra_dirs=extra)
+                        binds_mods.ensure_switch_hook(cdir, label, extra_dirs=extra)
                 updated.append(item)
                 manifest.save(opts.root, man)  # save as we go
             except download.Cancelled:
@@ -204,7 +224,7 @@ def apply_updates(opts, items, rep, cancel_event=None):
             except Exception as exc:
                 rep.log("  WARN: %s update failed: %s" % (item.title, exc))
                 failed.append((item, str(exc)))
-        if result.fte_exe:
+        if result.fte_exe and not existing:
             from . import launchers
             launchers.ensure_fte_default_fmf(opts.fte_dir, log=rep.log)
     finally:
