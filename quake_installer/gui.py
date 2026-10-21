@@ -629,6 +629,56 @@ class InstallerApp(object):
                 return k
         return "classic"
 
+    def _circle_img(self, size, fill, ring):
+        img = tk.PhotoImage(master=self.root, width=size + 7, height=size)
+        c = (size - 1) / 2.0
+        r = size / 2.0 - 0.5
+        rows = []
+        for y in range(size):
+            row = []
+            for x in range(size):
+                d = ((x - c) ** 2 + (y - c) ** 2) ** 0.5
+                if d <= r - 1.6:
+                    row.append(fill)
+                elif d <= r:
+                    row.append(ring)
+                else:
+                    row.append(None)
+            rows.append(row)
+        for y, row in enumerate(rows):
+            for x, col in enumerate(row):
+                if col:
+                    img.put(col, (x, y))
+        return img
+
+    def _ensure_dark_radio(self, style, pal):
+        theme = style.theme_use()
+        done = getattr(self, "_dark_radio_themes", set())
+        if theme in done:
+            return
+        size = 18
+        try:
+            size = max(14, int(round(18 * float(self.root.tk.call("tk", "scaling")) / 1.333)))
+        except Exception:
+            pass
+        imgs = getattr(self, "_radio_imgs", [])
+        on = self._circle_img(size, pal["accent"], pal["accent"])
+        off = self._circle_img(size, None, "#9a9a9a")
+        hov = self._circle_img(size, None, "#ffffff")
+        dis = self._circle_img(size, None, "#555555")
+        imgs += [on, off, hov, dis]
+        self._radio_imgs = imgs
+        style.element_create("Bqi.Radio.indicator", "image", off,
+                             ("disabled", dis), ("selected", on),
+                             ("active", hov), sticky="")
+        style.layout("Bqi.TRadiobutton", [
+            ("Radiobutton.padding", {"sticky": "nswe", "children": [
+                ("Bqi.Radio.indicator", {"side": "left", "sticky": ""}),
+                ("Radiobutton.label", {"side": "left", "sticky": "nswe"})]})])
+        style.configure("Bqi.TRadiobutton", padding=(0, 2, 6, 2))
+        done.add(theme)
+        self._dark_radio_themes = done
+
     def _apply_theme(self, save=False):
         key = self._theme_key()
         style = ttk.Style()
@@ -671,15 +721,20 @@ class InstallerApp(object):
         style = ttk.Style()
         style.configure("Muted.TLabel", foreground=pal["muted"])
         style.configure("Link.TLabel", foreground=pal["link"])
-        # Dark: selected radio = accent + bold, unselected clearly dimmer; focus ring.
+        # Dark: selected radio = solid accent-blue bubble; text unchanged.
+        style.map("TRadiobutton", foreground=[], font=[])
+        rstyle = "TRadiobutton"
         if dark:
-            bold = ("Segoe UI", 10, "bold") if IS_WINDOWS else ("TkDefaultFont", 10, "bold")
-            style.map("TRadiobutton",
-                      foreground=[("disabled", "#666"), ("selected", pal["accent"]),
-                                  ("active", "#ffffff"), ("!selected", pal["dim"])],
-                      font=[("selected", bold)])
-        else:
-            style.map("TRadiobutton", foreground=[], font=[])
+            try:
+                self._ensure_dark_radio(style, pal)
+                rstyle = "Bqi.TRadiobutton"
+            except tk.TclError:
+                rstyle = "TRadiobutton"
+        for rb in getattr(self, "mode_radios", []) + getattr(self, "radios", []):
+            try:
+                rb.configure(style=rstyle)
+            except tk.TclError:
+                pass
         bg = style.lookup("TFrame", "background") or None
         for c in self.canvases:
             try:
