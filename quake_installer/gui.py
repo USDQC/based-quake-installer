@@ -651,6 +651,16 @@ class InstallerApp(object):
                     img.put(col, (x, y))
         return img
 
+    def _win7_radio_imgs(self, size):
+        base = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "quake_installer", "assets", "radio")
+        sizes = sorted(int(f.rsplit("_", 1)[1][:-4]) for f in os.listdir(base)
+                       if f.startswith("radio_selected_") and f.endswith(".png"))
+        best = min(sizes, key=lambda s: abs(s - size))
+        return [tk.PhotoImage(master=self.root, file=os.path.join(
+            base, "radio_%s_%d.png" % (st, best)))
+            for st in ("selected", "unselected", "hover", "disabled")]
+
     def _ensure_dark_radio(self, style, pal):
         theme = style.theme_use()
         done = getattr(self, "_dark_radio_themes", set())
@@ -662,10 +672,14 @@ class InstallerApp(object):
         except Exception:
             pass
         imgs = getattr(self, "_radio_imgs", [])
-        on = self._circle_img(size, pal["accent"], pal["accent"])
-        off = self._circle_img(size, None, "#9a9a9a")
-        hov = self._circle_img(size, None, "#ffffff")
-        dis = self._circle_img(size, None, "#555555")
+        # Windows 7 style bubbles, pre-rendered by manual/render_radios.py.
+        try:
+            on, off, hov, dis = self._win7_radio_imgs(size)
+        except Exception:
+            on = self._circle_img(size, pal["accent"], pal["accent"])
+            off = self._circle_img(size, None, "#9a9a9a")
+            hov = self._circle_img(size, None, "#ffffff")
+            dis = self._circle_img(size, None, "#555555")
         imgs += [on, off, hov, dis]
         self._radio_imgs = imgs
         style.element_create("Bqi.Radio.indicator", "image", off,
@@ -721,7 +735,7 @@ class InstallerApp(object):
         style = ttk.Style()
         style.configure("Muted.TLabel", foreground=pal["muted"])
         style.configure("Link.TLabel", foreground=pal["link"])
-        # Dark: selected radio = solid accent-blue bubble; text unchanged.
+        # Dark: Windows 7 style radio bubbles (glossy blue dot); text unchanged.
         style.map("TRadiobutton", foreground=[], font=[])
         rstyle = "TRadiobutton"
         if dark:

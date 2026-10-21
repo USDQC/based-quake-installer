@@ -34,7 +34,7 @@ if errorlevel 1 exit /b 1
 set "MODE=--onefile"
 if /i "%~1"=="onedir" set "MODE=--onedir"
 
-set "COMMON=--noconfirm --clean --optimize 2 %MODE% --add-data tools\7za.exe;tools --add-data tools\7za-license.txt;tools --add-data quake_installer\vendor\sv_ttk;quake_installer\vendor\sv_ttk --hidden-import quake_installer.gui --hidden-import quake_installer.selftest"
+set "COMMON=--noconfirm --clean --optimize 2 %MODE% --add-data tools\7za.exe;tools --add-data tools\7za-license.txt;tools --add-data quake_installer\vendor\sv_ttk;quake_installer\vendor\sv_ttk --add-data quake_installer\assets;quake_installer\assets --hidden-import quake_installer.gui --hidden-import quake_installer.selftest"
 if exist "assets\icon.ico" set "COMMON=%COMMON% --icon assets\icon.ico"
 
 %PY% -m PyInstaller %COMMON% --windowed --name BasedQuakeInstaller installer_gui.py
