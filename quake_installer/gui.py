@@ -3,7 +3,9 @@ is updated through a queue polled with Tk.after (Tk is not thread-safe).
 
 This app is an installer only: progress + options. It installs engines and all
 configured mods together. It does not launch games, write .bat helpers, or
-create desktop shortcuts. FTE gets DISABLEHOMEDIR via default.fmf.
+create desktop shortcuts. FTE gets DISABLEHOMEDIR via default.fmf (full install).
+"Mods only (existing clients)" installs just mods/configs into the user's own
+unezQuake/FTE folders and leaves the clients and FTE's home-dir mode alone.
 """
 
 import os
@@ -20,6 +22,57 @@ from .constants import (APP_TITLE, DEFAULT_ROOT, LOOK_GL, LOOK_SOFT, MAX_NAME_LE
                         PLATFORM_LABELS, host_platform)
 from .installer import Cancelled, InstallError, Options, Reporter, run_install
 from .paths import IS_WINDOWS
+from . import existing as existing_mod
+
+MODE_FULL = "full"
+MODE_EXISTING = "existing"
+MODE_LABELS = ((MODE_FULL, "Full install"), (MODE_EXISTING, "Mods only (existing clients)"))
+
+THEMES = (("classic", "Classic"), ("sv-dark", "Dark"))
+# Colours for the plain tk widgets (Text, Canvas, KeyBox entries) and muted labels.
+PALETTES = {
+    "light": {"bg": None, "field": "white", "fg": "black", "disabled": "#eeeeee",
+              "capture": "#ffe680", "capture_fg": "black", "accent": "#1a6fd1",
+              "border": "#9a9a9a", "hover": "#5b8fd6", "dim": None, "muted": "#555", "link": "#1a4f8b",
+              "err": "#b00020", "ok": "#1b5e20", "warn": "#8a6d00", "text_bg": "white"},
+    "dark": {"bg": "#1c1c1c", "field": "#2b2b2b", "fg": "#e6e6e6", "disabled": "#3a3a3a",
+             "capture": "#0f4c81", "capture_fg": "#ffffff", "accent": "#57c8ff",
+             "border": "#4a4a4a", "hover": "#8fb8e8", "dim": "#8c8c8c", "muted": "#a8a8a8", "link": "#8ab4f8",
+             "err": "#ff8a80", "ok": "#81c784", "warn": "#ffd54f", "text_bg": "#232323"},
+}
+
+
+def _load_sv_ttk():
+    """sv_ttk if installed, else the vendored copy; None if neither works."""
+    try:
+        import sv_ttk
+        return sv_ttk
+    except ImportError:
+        pass
+    try:
+        from .vendor import sv_ttk
+        return sv_ttk
+    except ImportError:
+        return None
+
+
+def center_window(win, parent=None):
+    """Place win centered on parent (if given & mapped) or on its screen, without
+    a visible jump. Sizes are in real pixels, so this works with DPI scaling."""
+    win.update_idletasks()
+    w = max(win.winfo_width(), win.winfo_reqwidth())
+    h = max(win.winfo_height(), win.winfo_reqheight())
+    sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+    w, h = min(w, sw), min(h, sh)
+    if parent is not None and parent.winfo_ismapped():
+        x = parent.winfo_rootx() + (parent.winfo_width() - w) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
+    else:
+        x, y = (sw - w) // 2, (sh - h) // 2
+    x = max(0, min(x, sw - w))
+    y = max(0, min(y, sh - h))
+    win.geometry("%dx%d+%d+%d" % (w, h, x, y))
+    return x, y, w, h
 
 
 def _enable_dpi_awareness():
@@ -101,6 +154,8 @@ class KeyBox(object):
     """
 
     active = None  # the KeyBox currently capturing, if any
+    pal = PALETTES["light"]
+    instances = []
 
     def __init__(self, parent, var, width=14, on_change=None):
         self.var = var
@@ -111,14 +166,22 @@ class KeyBox(object):
         var.trace_add("write", lambda *a: self._sync())
         self.entry = tk.Entry(parent, textvariable=self.shown, width=width,
                               state="readonly", cursor="hand2", relief="solid", bd=1,
-                              readonlybackground="white", fg="black",
-                              disabledbackground="#eeeeee", takefocus=0)
+                              readonlybackground=KeyBox.pal["field"],
+                              fg=KeyBox.pal["fg"],
+                              disabledbackground=KeyBox.pal["disabled"], takefocus=0,
+                              highlightthickness=2,
+                              highlightbackground=KeyBox.pal["border"],
+                              highlightcolor=KeyBox.pal["border"])
+        self.hover = False
+        KeyBox.instances.append(self)
         self._ws = self.entry.tk.call("tk", "windowingsystem")
         e = self.entry
         e.bind("<ButtonPress>", self._on_button)
         e.bind("<KeyPress>", self._on_key)
         e.bind("<MouseWheel>", self._on_wheel)
         e.bind("<FocusOut>", lambda _e: self.cancel())
+        e.bind("<Enter>", lambda _e: self._set_hover(True))
+        e.bind("<Leave>", lambda _e: self._set_hover(False))
         self.btn = ttk.Button(parent, text="✕", width=2, command=self.clear, takefocus=0,
                               style="Clear.TButton")
 
@@ -130,6 +193,22 @@ class KeyBox(object):
     def _sync(self):
         if not self.capturing:
             self.shown.set(self.var.get())
+
+    def _set_hover(self, on):
+        self.hover = on
+        self.recolor()
+
+    def recolor(self):
+        """Capturing: accent border + distinct fill; hover: lighter border."""
+        p = KeyBox.pal
+        if self.capturing:
+            ring, bg, fg = p["accent"], p["capture"], p["capture_fg"]
+        else:
+            ring = p["hover"] if self.hover and self.enabled else p["border"]
+            bg, fg = p["field"], p["fg"]
+        self.entry.configure(readonlybackground=bg, fg=fg, disabledbackground=p["disabled"],
+                             disabledforeground="#888", highlightbackground=ring,
+                             highlightcolor=ring)
 
     def set_enabled(self, enabled):
         if not enabled:
@@ -148,7 +227,7 @@ class KeyBox(object):
         KeyBox.active = self
         self.capturing = True
         self.shown.set(_PROMPT)
-        self.entry.configure(readonlybackground="#ffe680")
+        self.recolor()
         self.entry.focus_set()
         try:
             self.entry.grab_set()  # mouse buttons anywhere in the window go to this box
@@ -163,7 +242,7 @@ class KeyBox(object):
             self.entry.grab_release()
         except tk.TclError:
             pass
-        self.entry.configure(readonlybackground="white")
+        self.recolor()
         self.shown.set(self.var.get())
 
     def cancel(self):
@@ -228,13 +307,23 @@ class InstallerApp(object):
         self.last_opts = None
         self._step = (0, 6)
 
+        root.withdraw()  # placed centered once built (no visible jump)
         root.title("%s  v%s" % (APP_TITLE, __version__))
         root.minsize(960, 680)
+        self.classic_theme = "vista" if IS_WINDOWS else "clam"
         try:
-            ttk.Style().theme_use("vista" if IS_WINDOWS else "clam")
+            ttk.Style().theme_use(self.classic_theme)
         except tk.TclError:
             pass
+        self.classic_style = ttk.Style().configure(".")  # restored after Dark
         ttk.Style().configure("Clear.TButton", padding=(2, 0))
+        self.var_theme = tk.StringVar(value=THEMES[0][1])
+        self.canvases = []
+        self.var_mode = tk.StringVar(value=MODE_FULL)
+        self.var_unez = tk.StringVar()
+        self.var_fte = tk.StringVar()
+        self.var_fte_cfg = tk.StringVar()
+        self.fte_cfg_choice = {}  # fte folder -> "home" / "install" (user answered)
 
         self.var_root = tk.StringVar(value=DEFAULT_ROOT)
         self.var_name = tk.StringVar(value="player")
@@ -256,7 +345,12 @@ class InstallerApp(object):
         self._build()
         self._load_settings()
         self.var_root.trace_add("write", lambda *a: self._update_paths())
+        self.var_fte.trace_add("write", lambda *a: self._update_fte_cfg())
         self._update_paths()
+        self._show_mode()
+        self._update_fte_cfg()
+        center_window(root)
+        root.deiconify()
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.after(100, self._poll)
         selfupdate.cleanup_old()  # the exe left over from the last self-update
@@ -275,22 +369,58 @@ class InstallerApp(object):
 
         ttk.Label(outer, text=APP_TITLE, font=("Segoe UI", 13, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 2))
+        head = ttk.Frame(outer)
+        head.grid(row=0, column=0, columnspan=2, sticky="e")
         ttk.Label(
-            outer, foreground="#555",
-            text=("Installer — engines + all mods together. No launchers or .bat files. "
-                  "FTE uses default.fmf (DISABLEHOMEDIR).")
-        ).grid(row=0, column=0, columnspan=2, sticky="e")
+            head, style="Muted.TLabel",
+            text="Installs unezQuake, FTE and classic QuakeWorld mods."
+        ).pack(side="left")
+        ttk.Label(head, text="Theme:").pack(side="left", padx=(12, 4))
+        self.cmb_theme = ttk.Combobox(head, textvariable=self.var_theme, state="readonly",
+                                      width=10, values=[t[1] for t in THEMES])
+        self.cmb_theme.pack(side="left")
+        self.cmb_theme.bind("<<ComboboxSelected>>", lambda _e: self._apply_theme(save=True))
 
-        # Install path
+        # Install mode + folder(s)
         f = ttk.LabelFrame(outer, text="Install folder", padding=6)
         f.grid(row=1, column=0, columnspan=2, sticky="ew", **pad)
         f.columnconfigure(0, weight=1)
-        self.ent_root = ttk.Entry(f, textvariable=self.var_root)
+        self.frm_install = f
+        mrow = ttk.Frame(f)
+        mrow.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        ttk.Label(mrow, text="Install mode:").pack(side="left")
+        self.mode_radios = []
+        for val, text in MODE_LABELS:
+            rb = ttk.Radiobutton(mrow, text=text, value=val, variable=self.var_mode,
+                                 command=self._show_mode)
+            rb.pack(side="left", padx=(8, 0))
+            self.mode_radios.append(rb)
+        # full install: one root folder
+        self.frm_full = ttk.Frame(f)
+        self.frm_full.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.frm_full.columnconfigure(0, weight=1)
+        self.ent_root = ttk.Entry(self.frm_full, textvariable=self.var_root)
         self.ent_root.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-        self.btn_browse = ttk.Button(f, text="Browse...", command=self._browse)
+        self.btn_browse = ttk.Button(self.frm_full, text="Browse...", command=self._browse)
         self.btn_browse.grid(row=0, column=1)
-        ttk.Label(f, textvariable=self.var_paths, foreground="#555").grid(
+        ttk.Label(self.frm_full, textvariable=self.var_paths, style="Muted.TLabel").grid(
             row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        # mods only: the user's own client folders (blank = skip that client)
+        self.frm_exist = ttk.Frame(f)
+        self.frm_exist.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.frm_exist.columnconfigure(1, weight=1)
+        self.exist_widgets = []
+        for r, (label, var, kind) in enumerate((("unezQuake folder:", self.var_unez, "unez"),
+                                                ("FTE folder:", self.var_fte, "fte"))):
+            ttk.Label(self.frm_exist, text=label).grid(row=r, column=0, sticky="w")
+            ent = ttk.Entry(self.frm_exist, textvariable=var)
+            ent.grid(row=r, column=1, sticky="ew", padx=6, pady=1)
+            btn = ttk.Button(self.frm_exist, text="Browse...",
+                             command=lambda v=var, k=kind: self._browse_client(v, k))
+            btn.grid(row=r, column=2, pady=1)
+            self.exist_widgets += [ent, btn]
+        ttk.Label(self.frm_exist, textvariable=self.var_fte_cfg, style="Muted.TLabel").grid(
+            row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
         # Left: player + binds
         left = ttk.Frame(outer)
@@ -312,7 +442,7 @@ class InstallerApp(object):
             rb.grid(row=1, column=c, sticky="w", padx=(0, 10))
             self.radios.append(rb)
 
-        bframe = ttk.LabelFrame(left, text="Binds (blank = unbound)", padding=6)
+        bframe = ttk.LabelFrame(left, text="Binds", padding=6)
         bframe.grid(row=1, column=0, sticky="nsew", pady=(6, 0))
         bframe.columnconfigure(0, weight=1)
         bframe.rowconfigure(0, weight=1)
@@ -339,13 +469,14 @@ class InstallerApp(object):
         btn_clear.pack(side="left", padx=3)
         self.preset_buttons.append(btn_clear)
         ttk.Label(
-            preset_row, foreground="#555",
+            preset_row, style="Muted.TLabel",
             text="QuakeWorld controls + weapons"
         ).pack(side="left", padx=(8, 0))
         ttk.Label(tab_qw, text=BIND_HELP).grid(row=2, column=0, columnspan=2, sticky="w",
                                                 pady=(4, 0))
 
         canvas = tk.Canvas(tab_qw, highlightthickness=0, height=260)
+        self.canvases.append(canvas)
         sb = ttk.Scrollbar(tab_qw, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=sb.set)
         canvas.grid(row=1, column=0, sticky="nsew")
@@ -388,8 +519,8 @@ class InstallerApp(object):
         self.cmb_mod = ttk.Combobox(pick, textvariable=self.var_mod_page, state="readonly",
                                     width=24)
         self.cmb_mod.pack(side="left", padx=6)
-        ttk.Label(pick, foreground="#555",
-                  text="saved to binds.cfg in the mod's folder; blank = skip").pack(side="left")
+        ttk.Label(pick, style="Muted.TLabel",
+                  text="Saved to binds.cfg in the mod's folder.").pack(side="left")
         ttk.Label(tab_mod, text=BIND_HELP).grid(row=2, column=0, sticky="w", pady=(4, 0))
         pages_host = ttk.Frame(tab_mod)
         pages_host.grid(row=1, column=0, sticky="nsew")
@@ -432,7 +563,7 @@ class InstallerApp(object):
             _show_page()
 
         # Right: included mods (always installed; informational only)
-        m = ttk.LabelFrame(outer, text="Included mods (always installed with engines)", padding=6)
+        m = ttk.LabelFrame(outer, text="Included mods", padding=6)
         m.grid(row=2, column=1, sticky="nsew", **pad)
         m.columnconfigure(0, weight=1)
         for r, spec in enumerate(self.mod_specs):
@@ -440,9 +571,9 @@ class InstallerApp(object):
                 row=r, column=0, sticky="w", pady=1)
         note_row = len(self.mod_specs)
         note = ttk.Label(
-            m, foreground="#555", wraplength=280, justify="left",
-            text="Installed with the engines. AirQuake, Quake Rally, and FvF are FTE-only; "
-                 "the spray pack is unezQuake-only."
+            m, style="Muted.TLabel", wraplength=280, justify="left",
+            text="AirQuake, Quake Rally and FvF are FTE-only; the spray pack is "
+                 "unezQuake-only."
         )
         note.grid(row=note_row, column=0, sticky="ew", pady=(8, 0))
         # Wrap to the panel's real width so the note never gets clipped.
@@ -465,7 +596,7 @@ class InstallerApp(object):
         self.btn_folder.pack(side="left", padx=6)
         self.btn_self = ttk.Button(b, text="Update installer", command=self._start_self_check)
         self.btn_self.pack(side="right")
-        self.lbl_self = ttk.Label(b, textvariable=self.var_self, foreground="#1a4f8b")
+        self.lbl_self = ttk.Label(b, textvariable=self.var_self, style="Link.TLabel")
         self.lbl_self.pack(side="right", padx=6)
 
         # Progress
@@ -488,9 +619,153 @@ class InstallerApp(object):
         sb2 = ttk.Scrollbar(txt_frame, command=self.txt.yview)
         sb2.grid(row=0, column=1, sticky="ns")
         self.txt.configure(yscrollcommand=sb2.set)
-        self.txt.tag_configure("err", foreground="#b00020")
-        self.txt.tag_configure("ok", foreground="#1b5e20")
-        self.txt.tag_configure("warn", foreground="#8a6d00")
+        self._recolor()
+
+    # ----------------------------------------------------------------- theme
+    def _theme_key(self):
+        name = self.var_theme.get()
+        for k, label in THEMES:
+            if label == name or k == name:
+                return k
+        return "classic"
+
+    def _circle_img(self, size, fill, ring):
+        img = tk.PhotoImage(master=self.root, width=size + 7, height=size)
+        c = (size - 1) / 2.0
+        r = size / 2.0 - 0.5
+        rows = []
+        for y in range(size):
+            row = []
+            for x in range(size):
+                d = ((x - c) ** 2 + (y - c) ** 2) ** 0.5
+                if d <= r - 1.6:
+                    row.append(fill)
+                elif d <= r:
+                    row.append(ring)
+                else:
+                    row.append(None)
+            rows.append(row)
+        for y, row in enumerate(rows):
+            for x, col in enumerate(row):
+                if col:
+                    img.put(col, (x, y))
+        return img
+
+    def _win7_radio_imgs(self, size):
+        base = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "quake_installer", "assets", "radio")
+        sizes = sorted(int(f.rsplit("_", 1)[1][:-4]) for f in os.listdir(base)
+                       if f.startswith("radio_selected_") and f.endswith(".png"))
+        best = min(sizes, key=lambda s: abs(s - size))
+        return [tk.PhotoImage(master=self.root, file=os.path.join(
+            base, "radio_%s_%d.png" % (st, best)))
+            for st in ("selected", "unselected", "hover", "disabled")]
+
+    def _ensure_dark_radio(self, style, pal):
+        theme = style.theme_use()
+        done = getattr(self, "_dark_radio_themes", set())
+        if theme in done:
+            return
+        size = 18
+        try:
+            size = max(14, int(round(18 * float(self.root.tk.call("tk", "scaling")) / 1.333)))
+        except Exception:
+            pass
+        imgs = getattr(self, "_radio_imgs", [])
+        # Windows 7 style bubbles, pre-rendered by manual/render_radios.py.
+        try:
+            on, off, hov, dis = self._win7_radio_imgs(size)
+        except Exception:
+            on = self._circle_img(size, pal["accent"], pal["accent"])
+            off = self._circle_img(size, None, "#9a9a9a")
+            hov = self._circle_img(size, None, "#ffffff")
+            dis = self._circle_img(size, None, "#555555")
+        imgs += [on, off, hov, dis]
+        self._radio_imgs = imgs
+        style.element_create("Bqi.Radio.indicator", "image", off,
+                             ("disabled", dis), ("selected", on),
+                             ("active", hov), sticky="")
+        style.layout("Bqi.TRadiobutton", [
+            ("Radiobutton.padding", {"sticky": "nswe", "children": [
+                ("Bqi.Radio.indicator", {"side": "left", "sticky": ""}),
+                ("Radiobutton.label", {"side": "left", "sticky": "nswe"})]})])
+        style.configure("Bqi.TRadiobutton", padding=(0, 2, 6, 2))
+        done.add(theme)
+        self._dark_radio_themes = done
+
+    def _apply_theme(self, save=False):
+        key = self._theme_key()
+        style = ttk.Style()
+        if key.startswith("sv-"):
+            sv = _load_sv_ttk()
+            try:
+                if sv is None:
+                    raise ImportError("sv_ttk not available")
+                sv.set_theme("dark" if key == "sv-dark" else "light", self.root)
+            except Exception as exc:  # never fail the app over a theme
+                self._log("WARN: Sun Valley theme unavailable (%s); using Classic" % exc)
+                key = "classic"
+                self.var_theme.set(THEMES[0][1])
+        if key == "classic":
+            try:
+                style.theme_use(self.classic_theme)
+            except tk.TclError:
+                pass
+            self._undo_sv_palette()
+        style.configure("Clear.TButton", padding=(2, 0))
+        self._recolor()
+        if save:
+            settings.update(theme=key)
+
+    def _undo_sv_palette(self):
+        """sv_ttk calls tk_setPalette and restyles '.', and Tk keeps those colours
+        after switching back. Re-apply the Classic palette and root style."""
+        if not getattr(self.root, "_sv_ttk_loaded", False):
+            return
+        style = ttk.Style()
+        saved = dict(self.classic_style or {})
+        self.root.tk.call("tk_setPalette", saved.get("background", "#d9d9d9"))
+        if saved:
+            style.configure(".", **saved)
+
+    def _recolor(self):
+        dark = self._theme_key() == "sv-dark"
+        pal = PALETTES["dark" if dark else "light"]
+        KeyBox.pal = pal
+        style = ttk.Style()
+        style.configure("Muted.TLabel", foreground=pal["muted"])
+        style.configure("Link.TLabel", foreground=pal["link"])
+        # Dark: Windows 7 style radio bubbles (glossy blue dot); text unchanged.
+        style.map("TRadiobutton", foreground=[], font=[])
+        rstyle = "TRadiobutton"
+        if dark:
+            try:
+                self._ensure_dark_radio(style, pal)
+                rstyle = "Bqi.TRadiobutton"
+            except tk.TclError:
+                rstyle = "TRadiobutton"
+        for rb in getattr(self, "mode_radios", []) + getattr(self, "radios", []):
+            try:
+                rb.configure(style=rstyle)
+            except tk.TclError:
+                pass
+        bg = style.lookup("TFrame", "background") or None
+        for c in self.canvases:
+            try:
+                if bg:
+                    c.configure(background=bg)
+            except tk.TclError:
+                pass
+        if hasattr(self, "txt"):
+            self.txt.configure(background=pal["text_bg"], foreground=pal["fg"],
+                               insertbackground=pal["fg"])
+            for tag in ("err", "ok", "warn"):
+                self.txt.tag_configure(tag, foreground=pal[tag])
+        for kb in KeyBox.instances:
+            try:
+                kb.recolor()
+            except tk.TclError:
+                pass
 
     # ----------------------------------------------------------------- helpers
     def _scrollable(self, parent, height=200):
@@ -498,6 +773,7 @@ class InstallerApp(object):
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(0, weight=1)
         canvas = tk.Canvas(parent, highlightthickness=0, height=height)
+        self.canvases.append(canvas)
         sb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=sb.set)
         canvas.grid(row=0, column=0, sticky="nsew")
@@ -546,6 +822,11 @@ class InstallerApp(object):
             "mod_binds": {mk: {a: v.get() for a, v in mv.items() if v.get().strip()}
                           for mk, mv in self.mod_bind_vars.items()},
             "check_installer_updates": bool(self.var_self_auto.get()),
+            "install_mode": self.var_mode.get(),
+            "unez_path": self.var_unez.get().strip(),
+            "fte_path": self.var_fte.get().strip(),
+            "fte_cfg_choice": dict(self.fte_cfg_choice),
+            "theme": self._theme_key(),
         }
 
     def _load_settings(self):
@@ -553,6 +834,18 @@ class InstallerApp(object):
         data = settings.load()
         if data and data.get("check_installer_updates") is False:
             self.var_self_auto.set(False)
+        if data:
+            if data.get("install_mode") in (MODE_FULL, MODE_EXISTING):
+                self.var_mode.set(data["install_mode"])
+            self.var_unez.set(data.get("unez_path") or "")
+            self.var_fte.set(data.get("fte_path") or "")
+            if isinstance(data.get("fte_cfg_choice"), dict):
+                self.fte_cfg_choice = dict(data["fte_cfg_choice"])
+            for k, label in THEMES:
+                if data.get("theme") == k:
+                    self.var_theme.set(label)
+            if self._theme_key() != "classic":
+                self._apply_theme()
         if not data:
             self._apply_preset("vanilla")
             self._log("First run: binds filled from the Default preset (stock default.cfg).")
@@ -576,6 +869,82 @@ class InstallerApp(object):
         r = self.var_root.get().strip() or DEFAULT_ROOT
         self.var_paths.set("Creates:  %s   and   %s" % (
             os.path.join(r, "unezQuake"), os.path.join(r, "FTE")))
+
+    def _existing_mode(self):
+        return self.var_mode.get() == MODE_EXISTING
+
+    def _show_mode(self):
+        if self._existing_mode():
+            self.frm_full.grid_remove()
+            self.frm_exist.grid()
+            self.frm_install.configure(text="Pick the folder for each client you have")
+        else:
+            self.frm_exist.grid_remove()
+            self.frm_full.grid()
+            self.frm_install.configure(text="Install folder")
+
+    def _browse_client(self, var, kind):
+        start = var.get() if os.path.isdir(var.get()) else None
+        d = filedialog.askdirectory(
+            title="Choose your existing %s folder" % ("unezQuake" if kind == "unez" else "FTE"),
+            initialdir=start, mustexist=True)
+        if not d:
+            return
+        d = os.path.normpath(d)
+        var.set(d)
+        check = existing_mod.check_unez_folder if kind == "unez" else existing_mod.check_fte_folder
+        warn = check(d)
+        if warn:
+            self._log("WARN: " + "; ".join(warn))
+            messagebox.showwarning(APP_TITLE, "This doesn't look like a %s folder:\n\n%s\n\n"
+                                   "You can still use it if you're sure."
+                                   % ("unezQuake" if kind == "unez" else "FTE",
+                                      "\n".join(warn)))
+
+    def _fte_detect(self):
+        d = self.var_fte.get().strip()
+        if not d or not os.path.isdir(d):
+            return None
+        return existing_mod.detect_fte_config(d)
+
+    def _update_fte_cfg(self):
+        d = self.var_fte.get().strip()
+        if not d:
+            self.var_fte_cfg.set("FTE: skipped (blank). Mods go into unezQuake only.")
+            return
+        det = self._fte_detect()
+        if det is None:
+            self.var_fte_cfg.set("FTE folder not found yet.")
+            return
+        choice = self.fte_cfg_choice.get(os.path.normcase(d))
+        if det.mode == existing_mod.MODE_ASK and choice:
+            where = det.home if choice == "home" else d
+            self.var_fte_cfg.set("FTE configs: %s  (your choice)" % where)
+        else:
+            self.var_fte_cfg.set(det.describe())
+
+    def _resolve_fte_cfg_dir(self, fte_dir):
+        """Effective FTE cfg dir; asks when detection is ambiguous. None = cancelled."""
+        det = existing_mod.detect_fte_config(fte_dir)
+        key = os.path.normcase(fte_dir)
+        if det.mode == existing_mod.MODE_ASK:
+            choice = self.fte_cfg_choice.get(key)
+            if not choice:
+                ans = messagebox.askyesnocancel(
+                    APP_TITLE,
+                    "Which folder does your FTE save its configs in?\n\n%s\n\n"
+                    "Yes = home folder:\n  %s\n\nNo = FTE install folder:\n  %s"
+                    % (det.reason, det.home, fte_dir))
+                if ans is None:
+                    return None
+                choice = "home" if ans else "install"
+                self.fte_cfg_choice[key] = choice
+            out = det.home if choice == "home" else fte_dir
+        else:
+            out = det.write_root
+        self._log("FTE config location: %s (%s)" % (out, det.reason))
+        self._update_fte_cfg()
+        return out
 
     def _apply_preset(self, name):
         preset = cfg.PRESETS.get(name) or {}
@@ -637,6 +1006,7 @@ class InstallerApp(object):
         st = "disabled" if busy else "normal"
         widgets = ([self.ent_root, self.btn_browse, self.ent_name, self.btn_install,
                     self.btn_cfg, self.btn_check, self.btn_self] +
+                   self.mode_radios + self.exist_widgets +
                    self.radios + self.bind_entries + self.preset_buttons)
         for w in widgets:
             w.configure(state=st)
@@ -646,6 +1016,8 @@ class InstallerApp(object):
 
     # --------------------------------------------------------------- actions
     def _collect(self, configs_only, allow_empty_name=False):
+        if self._existing_mode():
+            return self._collect_existing(configs_only, allow_empty_name)
         root = self.var_root.get().strip().strip('"')
         if not root:
             raise ValueError("Please choose an install folder.")
@@ -672,6 +1044,36 @@ class InstallerApp(object):
                        mods=None, mod_files={}, mods_only=False, mod_binds=mod_binds,
                        platform=self.platform)
 
+    def _collect_existing(self, configs_only, allow_empty_name=False):
+        paths = {}
+        for kind, var in (("unez", self.var_unez), ("fte", self.var_fte)):
+            p = os.path.expanduser(var.get().strip().strip('"'))
+            if p and not os.path.isdir(p):
+                raise ValueError("%s folder does not exist:\n%s"
+                                 % ("unezQuake" if kind == "unez" else "FTE", p))
+            paths[kind] = os.path.normpath(p) if p else None
+        if not paths["unez"] and not paths["fte"]:
+            raise ValueError("Choose your existing unezQuake folder and/or FTE folder.")
+        name = self.var_name.get()
+        if not name.strip() and not allow_empty_name:
+            raise ValueError("Please enter a player name.")
+        name = name if name.strip() else "player"
+        try:
+            binds = self._collect_binds()
+            mod_binds = self._collect_mod_binds()
+        except ValueError as exc:
+            raise ValueError("Invalid key in binds: %s" % exc)
+        fte_cfg = None
+        if paths["fte"]:
+            fte_cfg = self._resolve_fte_cfg_dir(paths["fte"])
+            if fte_cfg is None:
+                raise ValueError("Cancelled: FTE config location not chosen.")
+        return Options(root=paths["unez"] or paths["fte"], player_name=name,
+                       look=self.var_look.get(), binds=binds, configs_only=configs_only,
+                       mods=None, mod_binds=mod_binds, platform=self.platform,
+                       existing=True, unez_path=paths["unez"], fte_path=paths["fte"],
+                       fte_cfg_dir=fte_cfg)
+
     # ---------------------------------------------------------- updates
     def _start_check(self):
         if self.worker and self.worker.is_alive():
@@ -682,7 +1084,7 @@ class InstallerApp(object):
             messagebox.showerror(APP_TITLE, str(exc))
             return
         from . import updater
-        note = updater.platform_mismatch_note(opts.root, opts.platform)
+        note = "" if opts.existing else updater.platform_mismatch_note(opts.root, opts.platform)
         if note:
             self._log("NOTE: " + note)
             messagebox.showinfo(APP_TITLE, note)
@@ -703,7 +1105,7 @@ class InstallerApp(object):
         from . import updater
         rep = QueueReporter(self.q)
         try:
-            items = updater.check_updates(opts.root, opts.platform, log=rep.log)
+            items = updater.check_updates(opts.root, opts.platform, log=rep.log, opts=opts)
             self.q.put(("checked", items))
         except Exception as exc:
             self.q.put(("error", "Update check failed: %s" % exc))
@@ -734,7 +1136,7 @@ class InstallerApp(object):
         for i in items:
             tree.insert("", "end", text=i.title, values=(i.status, i.detail))
         tree.pack(fill="both", expand=True, pady=6)
-        ttk.Label(frm, foreground="#555", wraplength=760, justify="left",
+        ttk.Label(frm, style="Muted.TLabel", wraplength=760, justify="left",
                   text="Update replaces engine files and mod paks only; your cfgs "
                        "(autoexec/binds/config.cfg, default.fmf) are kept.").pack(anchor="w")
         bar = ttk.Frame(frm)
@@ -744,6 +1146,7 @@ class InstallerApp(object):
                          state="normal" if todo else "disabled",
                          command=lambda: (win.destroy(), self._start_update(items)))
         btn.pack(side="right", padx=6)
+        center_window(win, self.root)
         self.update_window = win
 
     def _start_update(self, items):
@@ -809,7 +1212,7 @@ class InstallerApp(object):
             ttk.Label(frm, text="What's new:").pack(anchor="w", pady=(8, 0))
             ttk.Label(frm, text=rel.notes, justify="left", wraplength=520).pack(
                 anchor="w", padx=(8, 0))
-        ttk.Label(frm, foreground="#555", wraplength=520, justify="left",
+        ttk.Label(frm, style="Muted.TLabel", wraplength=520, justify="left",
                   text="This updates the installer program only. Your games, mods and "
                        "configs are not touched.").pack(anchor="w", pady=(10, 0))
         ttk.Checkbutton(frm, text="Check for a new installer when it starts",
@@ -821,6 +1224,7 @@ class InstallerApp(object):
         ttk.Button(bar, text="Update now",
                    command=lambda: (win.destroy(), self._start_self_update(rel))
                    ).pack(side="right", padx=6)
+        center_window(win, self.root)
         self.self_window = win
 
     def _save_self_auto(self):
@@ -900,7 +1304,8 @@ class InstallerApp(object):
         self._set_busy(True)
         self._log("=" * 60)
         self._log("Starting %s..." % ("config update" if configs_only else
-                                      "install (engines + all mods)"))
+                                      "mods-only install (your clients are not changed)"
+                                      if opts.existing else "install (engines + all mods)"))
         self.worker = threading.Thread(target=self._worker, args=(opts,), daemon=True)
         self.worker.start()
 
@@ -988,8 +1393,13 @@ class InstallerApp(object):
         self._log("")
         self._log("INSTALL COMPLETE" if not o.configs_only
                   else "INSTALL COMPLETE (configs updated)")
-        self._log("  UnezQuake : %s" % os.path.join(o.unez_dir, res.unez_exe or "?"))
-        self._log("  FTE       : %s" % os.path.join(o.fte_dir, res.fte_exe or "?"))
+        if o.existing:
+            self._log("  Mods only: client programs and their settings were not changed.")
+            if o.fte_dir:
+                self._log("  FTE configs: %s" % o.fte_cfg_root)
+        for label, d, exe in (("UnezQuake", o.unez_dir, res.unez_exe),
+                              ("FTE      ", o.fte_dir, res.fte_exe)):
+            self._log("  %s : %s" % (label, os.path.join(d, exe or "?") if d else "(skipped)"))
         if res.fte_source:
             self._log("  FTE pkg   : %s" % res.fte_source)
         if res.fte_fmf:
@@ -1004,19 +1414,33 @@ class InstallerApp(object):
             self._log("WARN: " + w)
         self._log("  Only shareware pak0.pak is installed. Copy your own pak1.pak into each "
                   "id1 folder that needs registered Quake.")
-        self._log("  FTE: run the exe from the FTE folder — default.fmf DISABLEHOMEDIR "
-                  "replaces needing -nohome on the command line.")
+        if not o.existing:
+            self._log("  FTE: run the exe from the FTE folder — default.fmf DISABLEHOMEDIR "
+                      "replaces needing -nohome on the command line.")
 
     def _open_folder(self):
-        path = self.var_root.get().strip()
-        if not os.path.isdir(path):
-            messagebox.showinfo(APP_TITLE, "Folder does not exist yet:\n%s" % path)
-            return
-        if IS_WINDOWS:
-            os.startfile(path)
+        if self._existing_mode():
+            paths = [p for p in (self.var_unez.get().strip(), self.var_fte.get().strip()) if p]
+            det = self._fte_detect()
+            if det is not None and det.write_root and \
+                    os.path.normcase(det.write_root) != os.path.normcase(det.install):
+                paths.append(det.write_root)  # FTE home dir (where its cfgs are)
+            paths = [p for p in paths if os.path.isdir(p)]
+            if not paths:
+                messagebox.showinfo(APP_TITLE, "Choose your existing client folder(s) first.")
+                return
         else:
-            import subprocess
-            subprocess.Popen(["xdg-open", path])
+            path = self.var_root.get().strip()
+            if not os.path.isdir(path):
+                messagebox.showinfo(APP_TITLE, "Folder does not exist yet:\n%s" % path)
+                return
+            paths = [path]
+        for path in paths:
+            if IS_WINDOWS:
+                os.startfile(path)
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
 
     def _on_close(self):
         if self.worker and self.worker.is_alive():

@@ -27,8 +27,16 @@ class Options(object):
     def __init__(self, root, player_name, look, binds=None,
                  movement=None, weapons=None,
                  write_bats=False, configs_only=False, mods=None, mod_files=None,
-                 mods_only=False, mod_binds=None, platform=None):
+                 mods_only=False, mod_binds=None, platform=None,
+                 existing=False, unez_path=None, fte_path=None, fte_cfg_dir=None):
         self.root = root
+        # existing=True: "Mods only (existing clients)". unez_path / fte_path are the
+        # user's own client folders (None = skip that client); fte_cfg_dir is FTE's
+        # effective write dir (home dir or install dir, see existing.py).
+        self.existing = bool(existing)
+        self.unez_path = unez_path or None
+        self.fte_path = fte_path or None
+        self.fte_cfg_dir = fte_cfg_dir or None
         self.player_name = player_name
         self.look = look
         # binds: dict action_id -> key. Blank/missing skipped. Legacy CLI can pass
@@ -51,11 +59,29 @@ class Options(object):
 
     @property
     def unez_dir(self):
+        if self.existing:
+            return self.unez_path
         return os.path.join(self.root, UNEZ_DIRNAME)
 
     @property
     def fte_dir(self):
+        if self.existing:
+            return self.fte_path
         return os.path.join(self.root, FTE_DIRNAME)
+
+    @property
+    def fte_cfg_root(self):
+        """Where FTE cfgs go: the detected write dir (existing mode) or the FTE folder."""
+        if self.existing and self.fte_path:
+            return self.fte_cfg_dir or self.fte_path
+        return self.fte_dir
+
+    def cfg_dir_for(self, label, data_dir):
+        """Map a client gamedir (data) path to the folder its cfgs go into."""
+        if label == "FTE" and self.fte_dir and self.fte_cfg_root != self.fte_dir:
+            rel = os.path.relpath(data_dir, self.fte_dir)
+            return os.path.join(self.fte_cfg_root, rel)
+        return data_dir
 
 
 class Result(object):
@@ -157,6 +183,9 @@ def installed_mod_dirs(opts):
         for label, target in modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
             if os.path.isdir(target):
                 out.append((spec, label, target))
+            elif opts.existing and spec.get("binds_only") and \
+                    os.path.isdir(opts.cfg_dir_for(label, target)):
+                out.append((spec, label, target))
     return out
 
 
@@ -173,8 +202,10 @@ def write_mod_configs(opts, rep, result):
         for k, mod_label, gen_label in binds_mods.key_conflicts(key, binds, opts.binds):
             rep.log("  NOTE: %s: %s is bound to both '%s' (mod) and '%s'; the mod bind "
                     "wins in that mod only (binds.cfg)" % (key, k, mod_label, gen_label))
-    for spec, label, target in installed_mod_dirs(opts):
+    for spec, label, data in installed_mod_dirs(opts):
         key = spec["key"]
+        target = opts.cfg_dir_for(label, data)
+        os.makedirs(target, exist_ok=True)
         if binds_mods.actions_for(key):
             cleaned = binds_mods.clean_mod_binds(key, (opts.mod_binds or {}).get(key) or {})
             text = binds_mods.render_mod_binds_cfg(key, cleaned, title=spec.get("title"))
@@ -183,14 +214,15 @@ def write_mod_configs(opts, rep, result):
             if cleaned:
                 rep.log("  wrote %s (%s, %d mod binds)" % (binds_path, label, len(cleaned)))
             result.cfg_files.append(binds_path)
-        auto = binds_mods.merge_mod_autoexec(target)
+        extra = [data] if data != target else []
+        auto = binds_mods.merge_mod_autoexec(target, extra_dirs=extra)
         if auto not in result.cfg_files:
             result.cfg_files.append(auto)
-        hook = binds_mods.ensure_switch_hook(target, label)
+        hook = binds_mods.ensure_switch_hook(target, label, extra_dirs=extra)
         if hook and hook not in result.cfg_files:
             result.cfg_files.append(hook)
     # unezQuake: going back to a base server re-runs the base autoexec (unbindall).
-    if os.path.isdir(opts.unez_dir):
+    if opts.unez_dir and os.path.isdir(opts.unez_dir):
         qw = os.path.join(opts.unez_dir, "qw")
         os.makedirs(qw, exist_ok=True)
         hook = binds_mods.ensure_switch_hook(qw, "unezQuake")
@@ -222,7 +254,7 @@ def write_configs(opts, rep, result):
 
 def write_unez_sources(opts, rep, result=None):
     """Merge-safe {unez}/ezquake/sb/sources.txt (server browser). Never fatal."""
-    if not os.path.isdir(opts.unez_dir):
+    if not opts.unez_dir or not os.path.isdir(opts.unez_dir):
         return None
     try:
         path = sb_sources.write_sources(opts.unez_dir, log=rep.log)
@@ -247,6 +279,8 @@ def resolve_mod_keys(opts):
 
 def run_install(opts, rep=None, cancel_event=None):
     rep = rep or Reporter()
+    if opts.existing:
+        return run_existing(opts, rep, cancel_event)
     result = Result()
     root = os.path.normpath(opts.root.strip().strip('"'))
     if not root or root in (".",):
@@ -353,11 +387,15 @@ def run_install(opts, rep=None, cancel_event=None):
 
 
 def find_unez(opts):
+    if not opts.unez_dir:
+        return None
     return extract.find_entry_ci(opts.unez_dir, UNEZ_EXE_BY_PLATFORM[opts.platform]) or \
         extract.find_entry_ci(opts.unez_dir, [n for v in UNEZ_EXE_BY_PLATFORM.values() for n in v])
 
 
 def find_fte(opts):
+    if not opts.fte_dir:
+        return None
     return extract.find_fte_exe(opts.fte_dir, FTE_EXE_BY_PLATFORM[opts.platform])
 
 
@@ -428,6 +466,7 @@ def install_clients(opts, rep, result, work, man, cancel_event=None, step_base=1
 
 def install_mods(opts, rep, result, work, cancel_event=None, man=None):
     """Install all configured mods (or a CLI subset) into each mod's client tree(s)."""
+    protect = EXISTING_PROTECTED if opts.existing else PROTECTED_FILES
     keys = resolve_mod_keys(opts)
     if not keys:
         rep.log("  no mods configured")
@@ -439,6 +478,14 @@ def install_mods(opts, rep, result, work, cancel_event=None, man=None):
         if not spec:
             rep.log("  WARN: unknown mod %r skipped" % key)
             continue
+        if not modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
+            rep.log("  --- %s: skipped (needs %s, not chosen)" % (
+                spec["title"], " or ".join(spec.get("clients") or ["fte"])))
+            continue
+        if opts.existing:
+            for _l, t in modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
+                extract.normalize_dir_case(os.path.dirname(t), os.path.basename(t),
+                                           log=rep.log)
         clients = ", ".join(spec.get("clients") or ["fte"])
         rep.log("  --- %s -> %s %s" % (spec["title"], clients, spec["gamedir"] + os.sep))
         if spec.get("needs_registered"):
@@ -449,7 +496,7 @@ def install_mods(opts, rep, result, work, cancel_event=None, man=None):
                 spec, opts.fte_dir, work, progress=rep.progress,
                 cancel_event=cancel_event, log=rep.log,
                 local_file=opts.mod_files.get(key), unez_dir=opts.unez_dir,
-                meta_out=meta, protect=PROTECTED_FILES)
+                meta_out=meta, protect=protect, ci_protect=opts.existing)
             if man is not None:
                 manifest.record(man, "mod:" + key, meta,
                                 extra={"source": src, "gamedir": spec["gamedir"]})
@@ -462,6 +509,112 @@ def install_mods(opts, rep, result, work, cancel_event=None, man=None):
             rep.log("  WARN: %s not installed: %s" % (spec["title"], msg))
             result.mods_failed.append((key, spec["title"], msg))
             result.warnings.append("%s not installed (see log)" % spec["title"])
+
+
+# Mods-only into existing clients: never replace these if present in any case
+# (the mod's or the user's own startup cfgs).
+EXISTING_PROTECTED = PROTECTED_FILES + ("quake.rc", "default.cfg", "frontend.cfg",
+                                        "hexen.rc", "server.cfg", "ezquake.cfg")
+
+BASED_EXEC = "exec based.cfg"
+
+
+def _ensure_exec_based(path, rep):
+    """Append 'exec based.cfg' to an existing autoexec (keep the user's lines) or
+    create our stub. Returns path."""
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            old = fh.read()
+        if any(l.strip().lower() == BASED_EXEC for l in old.splitlines()):
+            return path
+        with open(path, "a", encoding="utf-8", newline="") as fh:
+            fh.write(("" if not old or old.endswith("\n") else "\r\n") +
+                     "// Based Quake Installer: your name/binds/look\r\n" +
+                     BASED_EXEC + "\r\n")
+        rep.log("  appended exec based.cfg to %s" % path)
+        return path
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(AUTOEXEC_STUB.replace("\n", "\r\n"))
+    rep.log("  wrote %s" % path)
+    return path
+
+
+def write_configs_existing(opts, rep, result):
+    """Base configs for existing clients: id1/based.cfg (ours) + exec line merged
+    into the user's autoexec.cfg; never replaces their cfgs."""
+    from . import binds_mods
+    write_unez_sources(opts, rep, result)
+    for client, root in ((cfg.CLIENT_UNEZ, opts.unez_dir), (cfg.CLIENT_FTE, opts.fte_cfg_root)):
+        if not root:
+            continue
+        text = cfg.render_autoexec(client, opts.player_name, opts.binds, opts.look)
+        text = text.replace("// autoexec.cfg for", "// based.cfg (exec'd by autoexec.cfg) for", 1)
+        based = os.path.join(root, "id1", "based.cfg")
+        write_cfg(based, text, rep)
+        rep.log("  wrote %s" % based)
+        result.cfg_files.append(based)
+        hits = []
+        for sub in ("id1", "qw", "ezquake" if client == cfg.CLIENT_UNEZ else "fte"):
+            d = os.path.join(root, sub)
+            for n in binds_mods._find_ci(d, "autoexec.cfg"):
+                hits.append(os.path.join(d, n))
+        if not hits:
+            hits = [os.path.join(root, "id1", "autoexec.cfg")]
+        for p in hits:
+            result.cfg_files.append(_ensure_exec_based(p, rep))
+    write_mod_configs(opts, rep, result)
+
+
+def existing_manifest_root(opts):
+    """Manifest location for a mods-only setup: the first chosen client folder."""
+    return opts.unez_dir or opts.fte_dir
+
+
+def run_existing(opts, rep, cancel_event=None):
+    """Mods-only into the user's own clients. No client download, no default.fmf."""
+    from . import existing
+    result = Result()
+    if not opts.unez_dir and not opts.fte_dir:
+        raise InstallError("Choose an existing unezQuake folder and/or an FTE folder.")
+    for label, d, check in (("unezQuake", opts.unez_dir, existing.check_unez_folder),
+                            ("FTE", opts.fte_dir, existing.check_fte_folder)):
+        if not d:
+            rep.log("%-13s: (skipped)" % label)
+            continue
+        if not os.path.isdir(d):
+            raise InstallError("%s folder does not exist: %s" % (label, d))
+        _check_writable(d)
+        for w in check(d):
+            rep.log("  WARN: %s: %s" % (label, w))
+            result.warnings.append("%s: %s" % (label, w))
+        rep.log("%-13s: %s" % (label, d))
+    if opts.fte_dir:
+        _mkdirs(opts.fte_cfg_root)
+        rep.log("FTE configs  : %s" % opts.fte_cfg_root)
+    opts.root = existing_manifest_root(opts)
+    result.unez_exe = find_unez(opts) if opts.unez_dir else None
+    result.fte_exe = find_fte(opts) if opts.fte_dir else None
+    steps = 2
+    if opts.configs_only:
+        rep.step(1, 1, "Writing configs into your clients")
+        write_configs_existing(opts, rep, result)
+        return result
+    work = tempfile.mkdtemp(prefix="quake-gui-mods-")
+    try:
+        man = manifest.load(opts.root)
+        man["mode"] = "existing"
+        rep.step(1, steps, "Installing mods + skins/sprays (clients untouched)")
+        install_mods(opts, rep, result, work, cancel_event, man=man)
+        result.manifest_path = manifest.save(opts.root, man)
+        rep.step(2, steps, "Writing configs into your clients")
+        write_configs_existing(opts, rep, result)
+        rep.log("  wrote %s" % result.manifest_path)
+    except (DownloadError, ExtractError) as exc:
+        raise InstallError(str(exc))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return result
 
 
 def installed_mod_specs(opts):

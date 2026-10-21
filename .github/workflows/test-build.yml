@@ -1,0 +1,68 @@
+name: Test build
+
+# Test builds from the 'testing' branch: run the tests, build the Windows exe and
+# keep BasedQuakeInstaller-windows-x64.zip as a run artifact. No release, no tag.
+on:
+  push:
+    branches: [testing]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      ZIP: BasedQuakeInstaller-windows-x64.zip
+      BQI_PYTHON: python
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Run the tests
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q tests -p no:cacheprovider
+
+      - name: Build the exe (build_exe.bat, pinned PyInstaller)
+        shell: cmd
+        run: call build_exe.bat
+
+      - name: Smoke-test the built exes
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-ChildItem dist | Format-Table Name, Length
+          & .\dist\BasedQuakeInstaller-cli.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "cli --version failed ($LASTEXITCODE)" }
+          & .\dist\BasedQuakeInstaller-cli.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "cli --self-test failed ($LASTEXITCODE)" }
+          $report = Join-Path $env:RUNNER_TEMP "gui-selftest.json"
+          $p = Start-Process -FilePath .\dist\BasedQuakeInstaller.exe -ArgumentList "--self-test", "`"$report`"" -Wait -PassThru
+          if (Test-Path $report) { Get-Content $report }
+          if ($p.ExitCode -ne 0) { throw "BasedQuakeInstaller.exe --self-test exit code $($p.ExitCode)" }
+
+      - name: Package the zip
+        run: |
+          $ErrorActionPreference = "Stop"
+          $stage = Join-Path $env:RUNNER_TEMP "BasedQuakeInstaller"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item dist\BasedQuakeInstaller.exe, README.md, LICENSE, tools\7za-license.txt $stage
+          Compress-Archive -Path "$stage\*" -DestinationPath $env:ZIP -CompressionLevel Optimal -Force
+          Get-FileHash $env:ZIP, dist\BasedQuakeInstaller.exe -Algorithm SHA256 | Format-Table Hash, Path
+
+      - name: Keep the build as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasedQuakeInstaller-windows-x64-testing
+          path: ${{ env.ZIP }}
+          retention-days: 14
