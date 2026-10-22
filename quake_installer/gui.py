@@ -18,8 +18,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import __version__, cfg, binds_mods, keycapture, mods as modlib, selfupdate, settings
-from .constants import (APP_TITLE, DEFAULT_ROOT, LOOK_GL, LOOK_SOFT, MAX_NAME_LEN,
-                        PLATFORM_LABELS, host_platform)
+from .constants import (APP_TITLE, DEFAULT_ROOT, FTE_DIRNAME, LOOK_GL, LOOK_SOFT,
+                        MAX_NAME_LEN, PLATFORM_LABELS, UNEZ_DIRNAME, host_platform)
 from .installer import Cancelled, InstallError, Options, Reporter, run_install
 from .paths import IS_WINDOWS
 from . import existing as existing_mod
@@ -297,6 +297,33 @@ class KeyBox(object):
         return "break"
 
 
+class _Tooltip(object):
+    """Minimal hover label (ttk has no tooltip); used by the cog button."""
+
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        widget.bind("<Enter>", self._show, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+
+    def _show(self, _event=None):
+        if self.tip is not None:
+            return
+        x = self.widget.winfo_rootx() + 12
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.wm_overrideredirect(True)
+        self.tip.wm_geometry("+%d+%d" % (x, y))
+        ttk.Label(self.tip, text=self.text, padding=(6, 2),
+                  style="Muted.TLabel").pack()
+
+    def _hide(self, _event=None):
+        if self.tip is not None:
+            self.tip.destroy()
+            self.tip = None
+
+
 class InstallerApp(object):
     def __init__(self, root):
         self.root = root
@@ -328,6 +355,14 @@ class InstallerApp(object):
         self.var_root = tk.StringVar(value=DEFAULT_ROOT)
         self.var_name = tk.StringVar(value="player")
         self.var_look = tk.StringVar(value=LOOK_SOFT)
+        # CH - Settings: which engines a full install creates, where, and whether the
+        # folder fields are remembered between runs (all on by default).
+        self.var_install_unez = tk.BooleanVar(value=True)
+        self.var_install_fte = tk.BooleanVar(value=True)
+        self.var_unez_target = tk.StringVar()
+        self.var_fte_target = tk.StringVar()
+        self.var_remember_dirs = tk.BooleanVar(value=True)
+        self._gear_cache = {}
         self.platform = host_platform()  # always the OS we run on
         self.var_status = tk.StringVar(value="Ready.")
         self.var_paths = tk.StringVar()
@@ -345,6 +380,10 @@ class InstallerApp(object):
         self._build()
         self._load_settings()
         self.var_root.trace_add("write", lambda *a: self._update_paths())
+        self.var_unez_target.trace_add("write", lambda *a: self._update_paths())
+        self.var_fte_target.trace_add("write", lambda *a: self._update_paths())
+        self.var_install_unez.trace_add("write", lambda *a: self._update_paths())
+        self.var_install_fte.trace_add("write", lambda *a: self._update_paths())
         self.var_fte.trace_add("write", lambda *a: self._update_fte_cfg())
         self._update_paths()
         self._show_mode()
@@ -352,6 +391,7 @@ class InstallerApp(object):
         center_window(root)
         root.deiconify()
         root.protocol("WM_DELETE_WINDOW", self._on_close)
+        root.bind("<Control-comma>", lambda _e: self._open_settings())
         root.after(100, self._poll)
         selfupdate.cleanup_old()  # the exe left over from the last self-update
         if self.var_self_auto.get():
@@ -375,11 +415,11 @@ class InstallerApp(object):
             head, style="Muted.TLabel",
             text="Installs unezQuake, FTE and classic QuakeWorld mods."
         ).pack(side="left")
-        ttk.Label(head, text="Theme:").pack(side="left", padx=(12, 4))
-        self.cmb_theme = ttk.Combobox(head, textvariable=self.var_theme, state="readonly",
-                                      width=10, values=[t[1] for t in THEMES])
-        self.cmb_theme.pack(side="left")
-        self.cmb_theme.bind("<<ComboboxSelected>>", lambda _e: self._apply_theme(save=True))
+        # CH - Settings lives behind the cog (theme + update check moved inside).
+        self.btn_settings = ttk.Button(head, image=self._gear_image(),
+                                       command=self._open_settings)
+        self.btn_settings.pack(side="left", padx=(12, 0))
+        self._settings_tip = _Tooltip(self.btn_settings, "Settings (Ctrl+,)")
 
         # Install mode + folder(s)
         f = ttk.LabelFrame(outer, text="Install folder", padding=6)
@@ -621,6 +661,215 @@ class InstallerApp(object):
         self.txt.configure(yscrollcommand=sb2.set)
         self._recolor()
 
+    # --------------------------------------------------------------- settings
+    def _assets_dir(self, *parts):
+        base = os.path.join(getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "quake_installer", "assets")
+        return os.path.join(base, *parts)
+
+    def _gear_image(self):
+        """Nearest-size gear icon for the current theme (None if assets are missing)."""
+        dark = self._theme_key() == "sv-dark"
+        folder = self._assets_dir("icons")
+        try:
+            sizes = sorted(int(f.rsplit("-", 1)[1][:-4]) for f in os.listdir(folder)
+                           if f.startswith("gear-") and f.endswith(".png"))
+        except OSError:
+            return None
+        if not sizes:
+            return None
+        try:
+            scale = float(self.root.tk.call("tk", "scaling")) / 1.333
+        except Exception:
+            scale = 1.0
+        want = max(14, min(40, int(round(18 * scale))))
+        best = min(sizes, key=lambda s: abs(s - want))
+        key = (dark, best)
+        if key not in self._gear_cache:
+            try:
+                self._gear_cache[key] = tk.PhotoImage(
+                    master=self.root, file=os.path.join(
+                        folder, "gear-%s-%d.png" % ("dark" if dark else "light", best)))
+            except tk.TclError:
+                return None
+        return self._gear_cache[key]
+
+    def _update_gear_image(self):
+        btn = getattr(self, "btn_settings", None)
+        if btn is None:
+            return
+        img = self._gear_image()
+        if img is None:
+            btn.configure(image="", text="Settings", compound="left")
+        else:
+            btn.configure(image=img, text="")
+
+    def _open_settings(self):
+        if self.worker and self.worker.is_alive():
+            return
+        old = getattr(self, "settings_window", None)
+        try:
+            if old is not None and old.winfo_exists():
+                old.lift()
+                old.focus_force()
+                return
+        except tk.TclError:
+            pass
+        win = tk.Toplevel(self.root)
+        win.title("Settings")
+        win.transient(self.root)
+        win.bind("<Escape>", lambda _e: win.destroy())
+        frm = ttk.Frame(win, padding=12)
+        frm.pack(fill="both", expand=True)
+        frm.columnconfigure(0, weight=1)
+
+        v_unez = tk.BooleanVar(value=self.var_install_unez.get())
+        v_fte = tk.BooleanVar(value=self.var_install_fte.get())
+        v_unez_path = tk.StringVar(value=self.var_unez_target.get())
+        v_fte_path = tk.StringVar(value=self.var_fte_target.get())
+        v_remember = tk.BooleanVar(value=self.var_remember_dirs.get())
+        v_self = tk.BooleanVar(value=self.var_self_auto.get())
+        v_theme = tk.StringVar(value=self.var_theme.get())
+
+        eng = ttk.LabelFrame(frm, text="Engines (full install)", padding=8)
+        eng.grid(row=0, column=0, sticky="ew")
+        eng.columnconfigure(1, weight=1)
+        hint_u = tk.StringVar()
+        hint_f = tk.StringVar()
+        ent_u = ttk.Entry(eng, textvariable=v_unez_path)
+        ent_f = ttk.Entry(eng, textvariable=v_fte_path)
+        btn_u = ttk.Button(eng, text="Browse...",
+                           command=lambda: _browse(v_unez_path, "unez"))
+        btn_f = ttk.Button(eng, text="Browse...",
+                           command=lambda: _browse(v_fte_path, "fte"))
+
+        def _browse(var, kind):
+            d = filedialog.askdirectory(
+                title="Choose the %s folder" % ("unezQuake" if kind == "unez" else "FTE"),
+                initialdir=var.get() if os.path.isdir(var.get()) else None,
+                mustexist=False, parent=win)
+            if d:
+                var.set(os.path.normpath(d))
+                _hints()
+
+        def _root_dir():
+            p = os.path.expanduser(self.var_root.get().strip().strip('"'))
+            return p or DEFAULT_ROOT
+
+        def _effective(var, name):
+            p = os.path.expanduser(var.get().strip().strip('"'))
+            return os.path.normpath(p) if p else os.path.join(_root_dir(), name)
+
+        def _hints():
+            hint_u.set("-> " + _effective(v_unez_path, UNEZ_DIRNAME))
+            hint_f.set("-> " + _effective(v_fte_path, FTE_DIRNAME))
+
+        def _sync():
+            for on, ent, btn in ((v_unez, ent_u, btn_u), (v_fte, ent_f, btn_f)):
+                state = "normal" if on.get() else "disabled"
+                ent.configure(state=state)
+                btn.configure(state=state)
+            _hints()
+
+        for row, (label, var, ent, btn, hint) in enumerate((
+                ("unezQuake", v_unez, ent_u, btn_u, hint_u),
+                ("FTE", v_fte, ent_f, btn_f, hint_f))):
+            ttk.Checkbutton(eng, text=label, variable=var, command=_sync).grid(
+                row=row * 2, column=0, sticky="w", pady=(0, 2 if row == 0 else 0))
+            ent.grid(row=row * 2, column=1, sticky="ew", padx=6,
+                     pady=(0, 2 if row == 0 else 0))
+            btn.grid(row=row * 2, column=2, pady=(0, 2 if row == 0 else 0))
+            ttk.Label(eng, textvariable=hint, style="Muted.TLabel").grid(
+                row=row * 2 + 1, column=1, columnspan=2, sticky="w", padx=6,
+                pady=(0, 6 if row == 0 else 0))
+        ttk.Label(eng, style="Muted.TLabel", wraplength=560, justify="left",
+                  text="Leave a folder blank to use the install folder. An existing "
+                       "folder is reused; your cfgs are never overwritten. Unchecked "
+                       "engines are not downloaded, updated, or given mods."
+                  ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
+
+        fold = ttk.LabelFrame(frm, text="Folders", padding=8)
+        fold.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        ttk.Checkbutton(fold, text="Remember install directory and client folders",
+                        variable=v_remember).pack(anchor="w")
+        ttk.Label(fold, style="Muted.TLabel", wraplength=560, justify="left",
+                  text="Off: the installer starts from the default folder every time "
+                       "(your name, binds and look are still remembered).").pack(anchor="w")
+
+        look = ttk.LabelFrame(frm, text="Appearance", padding=8)
+        look.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        row = ttk.Frame(look)
+        row.pack(fill="x")
+        ttk.Label(row, text="Theme:").pack(side="left")
+        ttk.Combobox(row, textvariable=v_theme, state="readonly", width=10,
+                     values=[label for _k, label in THEMES]).pack(side="left", padx=(6, 0))
+
+        upd = ttk.LabelFrame(frm, text="Installer updates", padding=8)
+        upd.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        ttk.Checkbutton(upd, text="Check for a new installer when it starts",
+                        variable=v_self).pack(anchor="w")
+        ttk.Label(upd, style="Muted.TLabel", wraplength=560, justify="left",
+                  text="Check only: a small notice appears, nothing is downloaded or "
+                       "replaced until you choose Update now.").pack(anchor="w")
+
+        def _norm(text):
+            t = os.path.expanduser(str(text).strip().strip('"'))
+            return os.path.normpath(t) if t else ""
+
+        def _save():
+            u_on, f_on = v_unez.get(), v_fte.get()
+            if not u_on and not f_on:
+                messagebox.showerror(APP_TITLE, "Choose at least one engine.",
+                                     parent=win)
+                return
+            u, f = _norm(v_unez_path.get()), _norm(v_fte_path.get())
+            for label, p in (("unezQuake", u), ("FTE", f)):
+                if not p:
+                    continue
+                if IS_WINDOWS and not (len(p) >= 3 and p[1] == ":" or p.startswith("\\\\")):
+                    messagebox.showerror(APP_TITLE, "Enter a full %s folder path, "
+                                         "e.g. C:\\Games\\ezquake." % label, parent=win)
+                    return
+                if not IS_WINDOWS and not os.path.isabs(p):
+                    messagebox.showerror(APP_TITLE, "Enter a full %s folder path, "
+                                         "e.g. ~/Games/ezquake." % label, parent=win)
+                    return
+            if u and f and os.path.normcase(u) == os.path.normcase(f):
+                messagebox.showerror(APP_TITLE, "unezQuake and FTE can't share a folder.",
+                                     parent=win)
+                return
+            for label, p, kind in (("unezQuake", u, "unez"), ("FTE", f, "fte")):
+                if not p or not os.path.isdir(p):
+                    continue
+                warn = (existing_mod.check_unez_folder(p) if kind == "unez"
+                        else existing_mod.check_fte_folder(p))
+                if warn and not messagebox.askyesno(
+                        APP_TITLE, "This doesn't look like a %s folder:\n\n%s\n\n"
+                        "Use it anyway?" % (label, "\n".join(warn)), parent=win):
+                    return
+            self.var_install_unez.set(u_on)
+            self.var_install_fte.set(f_on)
+            self.var_unez_target.set(u)
+            self.var_fte_target.set(f)
+            self.var_remember_dirs.set(v_remember.get())
+            self.var_self_auto.set(v_self.get())
+            if v_theme.get() != self.var_theme.get():
+                self.var_theme.set(v_theme.get())
+                self._apply_theme(save=True)
+            settings.save(self._settings_values())
+            self._update_paths()
+            win.destroy()
+
+        bar = ttk.Frame(frm)
+        bar.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        ttk.Button(bar, text="Save", command=_save).pack(side="right")
+        ttk.Button(bar, text="Cancel", command=win.destroy).pack(side="right", padx=6)
+        ent_u.bind("<KeyRelease>", lambda _e: _hints())
+        ent_f.bind("<KeyRelease>", lambda _e: _hints())
+        _sync()
+        center_window(win, self.root)
+        self.settings_window = win
+
     # ----------------------------------------------------------------- theme
     def _theme_key(self):
         name = self.var_theme.get()
@@ -714,6 +963,7 @@ class InstallerApp(object):
             self._undo_sv_palette()
         style.configure("Clear.TButton", padding=(2, 0))
         self._recolor()
+        self._update_gear_image()
         if save:
             settings.update(theme=key)
 
@@ -814,8 +1064,7 @@ class InstallerApp(object):
         return inner
 
     def _settings_values(self):
-        return {
-            "root": self.var_root.get().strip(),
+        values = {
             "player_name": self.var_name.get(),
             "look": self.var_look.get(),
             "binds": {k: v.get() for k, v in self.bind_vars.items() if v.get().strip()},
@@ -823,11 +1072,23 @@ class InstallerApp(object):
                           for mk, mv in self.mod_bind_vars.items()},
             "check_installer_updates": bool(self.var_self_auto.get()),
             "install_mode": self.var_mode.get(),
-            "unez_path": self.var_unez.get().strip(),
-            "fte_path": self.var_fte.get().strip(),
-            "fte_cfg_choice": dict(self.fte_cfg_choice),
             "theme": self._theme_key(),
+            # CH - Engine choice is always kept; folder values only when the user
+            # wants them remembered (off = defaults next start).
+            "remember_dirs": bool(self.var_remember_dirs.get()),
+            "install_unez": bool(self.var_install_unez.get()),
+            "install_fte": bool(self.var_install_fte.get()),
         }
+        if values["remember_dirs"]:
+            values.update({
+                "root": self.var_root.get().strip(),
+                "unez_path": self.var_unez.get().strip(),
+                "fte_path": self.var_fte.get().strip(),
+                "fte_cfg_choice": dict(self.fte_cfg_choice),
+                "unez_install_path": self.var_unez_target.get().strip(),
+                "fte_install_path": self.var_fte_target.get().strip(),
+            })
+        return values
 
     def _load_settings(self):
         """Last-used settings, or the Default preset on first run."""
@@ -835,12 +1096,21 @@ class InstallerApp(object):
         if data and data.get("check_installer_updates") is False:
             self.var_self_auto.set(False)
         if data:
+            remember = data.get("remember_dirs", True) is not False
+            self.var_remember_dirs.set(remember)
+            self.var_install_unez.set(data.get("install_unez", True) is not False)
+            self.var_install_fte.set(data.get("install_fte", True) is not False)
             if data.get("install_mode") in (MODE_FULL, MODE_EXISTING):
                 self.var_mode.set(data["install_mode"])
-            self.var_unez.set(data.get("unez_path") or "")
-            self.var_fte.set(data.get("fte_path") or "")
-            if isinstance(data.get("fte_cfg_choice"), dict):
-                self.fte_cfg_choice = dict(data["fte_cfg_choice"])
+            if remember:
+                self.var_unez_target.set(data.get("unez_install_path") or "")
+                self.var_fte_target.set(data.get("fte_install_path") or "")
+                self.var_unez.set(data.get("unez_path") or "")
+                self.var_fte.set(data.get("fte_path") or "")
+                if isinstance(data.get("fte_cfg_choice"), dict):
+                    self.fte_cfg_choice = dict(data["fte_cfg_choice"])
+                if data.get("root"):
+                    self.var_root.set(data["root"])
             for k, label in THEMES:
                 if data.get("theme") == k:
                     self.var_theme.set(label)
@@ -850,8 +1120,6 @@ class InstallerApp(object):
             self._apply_preset("vanilla")
             self._log("First run: binds filled from the Default preset (stock default.cfg).")
             return
-        if data.get("root"):
-            self.var_root.set(data["root"])
         if data.get("player_name"):
             self.var_name.set(data["player_name"][:MAX_NAME_LEN])
         if data.get("look") in (LOOK_SOFT, LOOK_GL):
@@ -866,9 +1134,16 @@ class InstallerApp(object):
         self._log("Loaded your last settings from %s" % settings.settings_path())
 
     def _update_paths(self):
-        r = self.var_root.get().strip() or DEFAULT_ROOT
-        self.var_paths.set("Creates:  %s   and   %s" % (
-            os.path.join(r, "unezQuake"), os.path.join(r, "FTE")))
+        root = os.path.expanduser(self.var_root.get().strip().strip('"')) or DEFAULT_ROOT
+        parts = []
+        for on, target, name in ((self.var_install_unez, self.var_unez_target, UNEZ_DIRNAME),
+                                 (self.var_install_fte, self.var_fte_target, FTE_DIRNAME)):
+            if not on.get():
+                continue
+            p = os.path.expanduser(target.get().strip().strip('"'))
+            parts.append(os.path.normpath(p) if p else os.path.join(root, name))
+        self.var_paths.set("Creates:  " + "   and   ".join(parts) if parts
+                           else "No engine selected - open Settings.")
 
     def _existing_mode(self):
         return self.var_mode.get() == MODE_EXISTING
@@ -1005,7 +1280,7 @@ class InstallerApp(object):
     def _set_busy(self, busy):
         st = "disabled" if busy else "normal"
         widgets = ([self.ent_root, self.btn_browse, self.ent_name, self.btn_install,
-                    self.btn_cfg, self.btn_check, self.btn_self] +
+                    self.btn_cfg, self.btn_check, self.btn_self, self.btn_settings] +
                    self.mode_radios + self.exist_widgets +
                    self.radios + self.bind_entries + self.preset_buttons)
         for w in widgets:
@@ -1015,6 +1290,20 @@ class InstallerApp(object):
         self.btn_cancel.configure(state="normal" if busy else "disabled")
 
     # --------------------------------------------------------------- actions
+    def _norm_install_target(self, text, label):
+        """Settings folder override: None when blank, else a validated full path."""
+        p = os.path.expanduser(str(text).strip().strip('"'))
+        if not p:
+            return None
+        p = os.path.normpath(p)
+        if IS_WINDOWS and not (len(p) >= 3 and p[1] == ":" or p.startswith("\\\\")):
+            raise ValueError("Enter a full %s folder path, e.g. C:\\Games\\%s."
+                             % (label, label))
+        if not IS_WINDOWS and not os.path.isabs(p):
+            raise ValueError("Enter a full %s folder path, e.g. ~/Games/%s."
+                             % (label, label))
+        return p
+
     def _collect(self, configs_only, allow_empty_name=False):
         if self._existing_mode():
             return self._collect_existing(configs_only, allow_empty_name)
@@ -1030,6 +1319,8 @@ class InstallerApp(object):
         if not name.strip() and not allow_empty_name:
             raise ValueError("Please enter a player name.")
         name = name if name.strip() else "player"
+        if not self.var_install_unez.get() and not self.var_install_fte.get():
+            raise ValueError("Choose at least one engine in Settings (unezQuake or FTE).")
         try:
             binds = self._collect_binds()
         except ValueError as exc:
@@ -1042,7 +1333,13 @@ class InstallerApp(object):
         return Options(root=root, player_name=name, look=self.var_look.get(),
                        binds=binds, write_bats=False, configs_only=configs_only,
                        mods=None, mod_files={}, mods_only=False, mod_binds=mod_binds,
-                       platform=self.platform)
+                       platform=self.platform,
+                       install_unez=bool(self.var_install_unez.get()),
+                       install_fte=bool(self.var_install_fte.get()),
+                       unez_target=self._norm_install_target(
+                           self.var_unez_target.get(), "ezquake"),
+                       fte_target=self._norm_install_target(
+                           self.var_fte_target.get(), "FTE"))
 
     def _collect_existing(self, configs_only, allow_empty_name=False):
         paths = {}
@@ -1215,9 +1512,6 @@ class InstallerApp(object):
         ttk.Label(frm, style="Muted.TLabel", wraplength=520, justify="left",
                   text="This updates the installer program only. Your games, mods and "
                        "configs are not touched.").pack(anchor="w", pady=(10, 0))
-        ttk.Checkbutton(frm, text="Check for a new installer when it starts",
-                        variable=self.var_self_auto,
-                        command=self._save_self_auto).pack(anchor="w", pady=(6, 0))
         bar = ttk.Frame(frm)
         bar.pack(fill="x", pady=(10, 0))
         ttk.Button(bar, text="Later", command=win.destroy).pack(side="right")
@@ -1226,9 +1520,6 @@ class InstallerApp(object):
                    ).pack(side="right", padx=6)
         center_window(win, self.root)
         self.self_window = win
-
-    def _save_self_auto(self):
-        settings.update(check_installer_updates=bool(self.var_self_auto.get()))
 
     def _start_self_update(self, rel):
         if self.worker and self.worker.is_alive():
@@ -1414,7 +1705,7 @@ class InstallerApp(object):
             self._log("WARN: " + w)
         self._log("  Only shareware pak0.pak is installed. Copy your own pak1.pak into each "
                   "id1 folder that needs registered Quake.")
-        if not o.existing:
+        if not o.existing and o.fte_dir:
             self._log("  FTE: run the exe from the FTE folder — default.fmf DISABLEHOMEDIR "
                       "replaces needing -nohome on the command line.")
 
@@ -1430,11 +1721,20 @@ class InstallerApp(object):
                 messagebox.showinfo(APP_TITLE, "Choose your existing client folder(s) first.")
                 return
         else:
-            path = self.var_root.get().strip()
-            if not os.path.isdir(path):
-                messagebox.showinfo(APP_TITLE, "Folder does not exist yet:\n%s" % path)
+            root_dir = os.path.expanduser(self.var_root.get().strip().strip('"'))
+            paths = [root_dir]
+            for on, target, name in (
+                    (self.var_install_unez, self.var_unez_target, UNEZ_DIRNAME),
+                    (self.var_install_fte, self.var_fte_target, FTE_DIRNAME)):
+                if not on.get():
+                    continue
+                p = os.path.expanduser(target.get().strip().strip('"'))
+                paths.append(os.path.normpath(p) if p else os.path.join(root_dir, name))
+            paths = [p for p in paths if p and os.path.isdir(p)]
+            if not paths:
+                messagebox.showinfo(APP_TITLE, "Nothing installed yet:\n%s"
+                                    % (root_dir or DEFAULT_ROOT))
                 return
-            paths = [path]
         for path in paths:
             if IS_WINDOWS:
                 os.startfile(path)

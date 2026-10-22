@@ -12,7 +12,11 @@ import sys
 
 FILENAME = "settings.json"
 KEYS = ("root", "player_name", "look", "binds", "mod_binds", "check_installer_updates",
-        "install_mode", "unez_path", "fte_path", "fte_cfg_choice", "theme")
+        "install_mode", "unez_path", "fte_path", "fte_cfg_choice", "theme",
+        # CH - Settings window: which engines to install, per-engine target folders
+        # and whether folder values are remembered at all.
+        "remember_dirs", "install_unez", "install_fte",
+        "unez_install_path", "fte_install_path")
 
 
 def settings_dir():

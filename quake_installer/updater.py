@@ -73,6 +73,16 @@ def platform_mismatch_note(root, running):
     return ""
 
 
+def _client_dirs(spec, root, opts=None):
+    # CH - Mods follow the selected engines: an unselected client's dir is None, so
+    # its gamedirs are never created or updated.
+    from .constants import FTE_DIRNAME, UNEZ_DIRNAME
+    if opts is not None:
+        return modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir)
+    return modlib.client_dirs(spec, os.path.join(root, FTE_DIRNAME),
+                              os.path.join(root, UNEZ_DIRNAME))
+
+
 def check_updates(root, platform, specs=None, log=print, head=download.head,
                   resolve_unez=clients.resolve_unez, resolve_fte=clients.resolve_fte,
                   get_text=None, opts=None):
@@ -93,6 +103,10 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
                                   ("client:fte", "FTE (%s)" % label, resolve_fte)):
         if existing:
             continue  # user's own client: never updated by us
+        if opts is not None and comp == "client:unez" and not getattr(opts, "uses_unez", True):
+            continue  # not selected in Settings
+        if opts is not None and comp == "client:fte" and not getattr(opts, "uses_fte", True):
+            continue
         if mismatch:
             items.append(UpdateItem(comp, title, manifest.STATUS_PLATFORM, comps.get(comp), None,
                                     "installed for %s; skipped"
@@ -119,8 +133,8 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
         log("  checking mods.json on Google Drive")
         specs, index_err = modlib.load_specs_online(log=log, get_text=get_text)
     for spec in specs:
-        if existing and not modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir):
-            continue  # needs a client that wasn't chosen
+        if not _client_dirs(spec, root, opts):
+            continue  # needs an engine that is not selected
         if spec.get("binds_only"):
             continue  # server-side mod: nothing downloaded, nothing to update
         comp = "mod:" + spec["key"]
@@ -129,7 +143,7 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
         inst = comps.get(comp)
         if remote.get("error"):
             st = manifest.STATUS_ERROR
-        elif inst is None and not _mod_present(root, spec, opts if existing else None):
+        elif inst is None and not _mod_present(root, spec, opts):
             st = manifest.STATUS_MISSING
         else:
             st = manifest.compare(inst or {}, remote)
@@ -147,13 +161,7 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
 
 
 def _mod_present(root, spec, opts=None):
-    from .constants import FTE_DIRNAME, UNEZ_DIRNAME
-    if opts is not None:
-        dirs = modlib.client_dirs(spec, opts.fte_dir, opts.unez_dir)
-    else:
-        dirs = modlib.client_dirs(spec, os.path.join(root, FTE_DIRNAME),
-                                  os.path.join(root, UNEZ_DIRNAME))
-    for label, target in dirs:
+    for label, target in _client_dirs(spec, root, opts):
         if modlib.is_present(spec, target):
             return True
     return False
@@ -166,6 +174,10 @@ def apply_updates(opts, items, rep, cancel_event=None):
     if existing:
         opts.root = installer.existing_manifest_root(opts)
         items = [i for i in items if not i.component.startswith("client:")]
+    if not getattr(opts, "uses_unez", True):
+        items = [i for i in items if i.component != "client:unez"]
+    if not getattr(opts, "uses_fte", True):
+        items = [i for i in items if i.component != "client:fte"]
     todo = [i for i in items if i.needs_update]
     updated, failed = [], []
     if not todo:
@@ -224,7 +236,7 @@ def apply_updates(opts, items, rep, cancel_event=None):
             except Exception as exc:
                 rep.log("  WARN: %s update failed: %s" % (item.title, exc))
                 failed.append((item, str(exc)))
-        if result.fte_exe and not existing:
+        if result.fte_exe and not existing and opts.fte_dir:
             from . import launchers
             launchers.ensure_fte_default_fmf(opts.fte_dir, log=rep.log)
     finally:
