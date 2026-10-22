@@ -1408,41 +1408,98 @@ class InstallerApp(object):
             self.q.put(("error", "Update check failed: %s" % exc))
 
     def _show_updates(self, items):
+        # CH - Results are now selectable: every installable component gets a checkbox,
+        # presets cover "all / engines / mods", and only the checked subset is applied.
         self._set_busy(False)
+        from . import updater
         todo = [i for i in items if i.needs_update]
         for i in items:
             tag = "WARN: " if i.needs_update or i.status not in ("up to date",) else "OK  "
             self._log(tag + i.line())
         self.var_status.set("%d update(s) available." % len(todo) if todo
                             else "Everything is up to date.")
+        old = getattr(self, "update_window", None)
+        if old is not None and old.winfo_exists():
+            old.destroy()
         win = tk.Toplevel(self.root)
         win.title("Check for updates")
         win.transient(self.root)
+        win.bind("<Escape>", lambda _e: win.destroy())
         frm = ttk.Frame(win, padding=10)
         frm.pack(fill="both", expand=True)
         ttk.Label(frm, font=("TkDefaultFont", 10, "bold"),
                   text=("Updates available:" if todo else "Everything is up to date.")
                   ).pack(anchor="w")
-        tree = ttk.Treeview(frm, columns=("status", "detail"), height=min(14, len(items)))
-        tree.heading("#0", text="Component")
-        tree.heading("status", text="Status")
-        tree.heading("detail", text="Details")
-        tree.column("#0", width=260)
-        tree.column("status", width=170)
-        tree.column("detail", width=420)
-        for i in items:
-            tree.insert("", "end", text=i.title, values=(i.status, i.detail))
-        tree.pack(fill="both", expand=True, pady=6)
+        rows_frame = ttk.Frame(frm)
+        rows_frame.pack(fill="both", expand=True, pady=6)
+        inner = self._scrollable(rows_frame, height=min(14, max(3, len(items))) * 22)
+        default_ids = updater.select_components(items)
+        engine_ids = updater.select_components(items, updater.SELECT_MODE_ENGINES)
+        mod_ids = updater.select_components(items, updater.SELECT_MODE_MODS)
+        row_vars = []
+        selectable = 0
+        for r, item in enumerate(items):
+            can = updater.is_selectable(item)
+            selectable += 1 if can else 0
+            var = tk.BooleanVar(value=can and item.component in default_ids)
+            chk = ttk.Checkbutton(inner, text=item.title, variable=var,
+                                  command=lambda: _refresh(),
+                                  state="normal" if can else "disabled")
+            chk.grid(row=r, column=0, sticky="w", padx=(2, 8), pady=1)
+            ttk.Label(inner, text=item.status, width=26, anchor="w").grid(
+                row=r, column=1, sticky="w", padx=(0, 8))
+            ttk.Label(inner, text=item.detail, style="Muted.TLabel",
+                      wraplength=340, justify="left").grid(row=r, column=2, sticky="w")
+            row_vars.append((item, var, can))
+        inner.columnconfigure(0, weight=1)
         ttk.Label(frm, style="Muted.TLabel", wraplength=760, justify="left",
                   text="Update replaces engine files and mod paks only; your cfgs "
-                       "(autoexec/binds/config.cfg, default.fmf) are kept.").pack(anchor="w")
+                       "(autoexec/binds/config.cfg, default.fmf) are kept. "
+                       "Tick the components to install, then Update selected."
+                  ).pack(anchor="w")
+
+        def _checked():
+            return [it for it, var, can in row_vars if can and var.get()]
+
+        def _refresh():
+            n = len(_checked())
+            btn_update.configure(text="Update selected (%d)" % n,
+                                 state="normal" if n else "disabled")
+            lbl_sel.configure(text="%d of %d component(s) selected" % (n, selectable))
+
+        def _preset(mode):
+            want = updater.select_components(items, mode)
+            for it, var, can in row_vars:
+                var.set(can and it.component in want)
+            _refresh()
+
+        def _apply():
+            chosen = _checked()
+            if not chosen:
+                return
+            win.destroy()
+            self._start_update(chosen)
+
+        lbl_sel = ttk.Label(frm, style="Muted.TLabel")
+        lbl_sel.pack(anchor="w")
         bar = ttk.Frame(frm)
         bar.pack(fill="x", pady=(6, 0))
-        ttk.Button(bar, text="Close", command=win.destroy).pack(side="right")
-        btn = ttk.Button(bar, text="Update %d" % len(todo) if todo else "Update",
-                         state="normal" if todo else "disabled",
-                         command=lambda: (win.destroy(), self._start_update(items)))
-        btn.pack(side="right", padx=6)
+        ttk.Button(bar, text="Select all",
+                   command=lambda: _preset(updater.SELECT_MODE_ALL)).pack(side="left")
+        ttk.Button(bar, text="Deselect all",
+                   command=lambda: _preset(updater.SELECT_MODE_NONE)).pack(
+            side="left", padx=(6, 0))
+        ttk.Button(bar, text="Engine only", state="normal" if engine_ids else "disabled",
+                   command=lambda: _preset(updater.SELECT_MODE_ENGINES)).pack(
+            side="left", padx=(18, 0))
+        ttk.Button(bar, text="Mods only", state="normal" if mod_ids else "disabled",
+                   command=lambda: _preset(updater.SELECT_MODE_MODS)).pack(
+            side="left", padx=(6, 0))
+        btn_update = ttk.Button(bar, text="Update selected (0)", state="disabled",
+                                command=_apply)
+        btn_update.pack(side="right")
+        ttk.Button(bar, text="Close", command=win.destroy).pack(side="right", padx=6)
+        _refresh()
         center_window(win, self.root)
         self.update_window = win
 

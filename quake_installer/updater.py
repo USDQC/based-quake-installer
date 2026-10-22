@@ -32,6 +32,51 @@ class UpdateItem(object):
         return "%-28s %s%s" % (self.title, self.status, d)
 
 
+# CH - Selection model for the update dialog: only rows apply_updates() can install
+# are checkable, and "not installed" stays out of the default so Update never
+# installs a mod the user did not ask for.
+SELECT_MODE_DEFAULT = "default"
+SELECT_MODE_ALL = "all"
+SELECT_MODE_NONE = "none"
+SELECT_MODE_ENGINES = "engines"
+SELECT_MODE_MODS = "mods"
+
+SELECT_MODES = (SELECT_MODE_DEFAULT, SELECT_MODE_ALL, SELECT_MODE_NONE,
+                SELECT_MODE_ENGINES, SELECT_MODE_MODS)
+
+
+def is_selectable(item):
+    """True when apply_updates() can install this item (outdated or missing)."""
+    return item.status in (manifest.STATUS_OUTDATED, manifest.STATUS_MISSING)
+
+
+def select_components(items, mode=SELECT_MODE_DEFAULT):
+    """Component ids to check for one dialog preset.
+
+    default: out-of-date rows only ("update available").
+    all: every selectable row, including "not installed".
+    engines: selectable client:* rows (unezQuake and FTE).
+    mods: selectable mod:* rows (mods and packs).
+    none: nothing.
+    """
+    if mode not in SELECT_MODES:
+        raise ValueError("unknown selection mode %r" % (mode,))
+    chosen = set()
+    if mode == SELECT_MODE_NONE:
+        return chosen
+    for item in items:
+        if not is_selectable(item):
+            continue
+        if mode == SELECT_MODE_DEFAULT and item.status == manifest.STATUS_MISSING:
+            continue
+        if mode == SELECT_MODE_ENGINES and not item.component.startswith("client:"):
+            continue
+        if mode == SELECT_MODE_MODS and not item.component.startswith("mod:"):
+            continue
+        chosen.add(item.component)
+    return chosen
+
+
 def _describe(meta):
     if not meta:
         return ""

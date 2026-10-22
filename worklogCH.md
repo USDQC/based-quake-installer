@@ -137,3 +137,10 @@ Branch: `feat/settings` (from `main` @ f4d92f4; worklog brought over from `feat/
 - CLI flags for engine selection (not in this PR).
 - Mixed "use my existing unezQuake folder for mods but install FTE" remains a
   mods-only-mode job; the Settings folder override installs the engine there.
+
+## 2026-10-22 - CH-updates (single PR branch)
+
+- `CH-updates` combines `feat/settings` + `feat/selective-updates` with merge
+  commits; this is the branch to review and the one BQICH is built from.
+- Old feature branches and local `test/settings+updates` stay until the PR is
+  merged, then can be deleted.
