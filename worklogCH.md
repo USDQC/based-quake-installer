@@ -124,7 +124,7 @@ Branch: `feat/settings` (from `main` @ f4d92f4; worklog brought over from `feat/
 - [x] tests (settings, engine install, update filtering)
 - [x] pytest: 179 passed, 6 skipped
 - [x] GUI smoke (cog, Settings save, remember off, dark theme)
-- [ ] commit / push / PR
+- [x] commit `bf7e9a7` + push `feat/settings` (PR page opened, not submitted)
 
 ### Verification
 - `python -m pytest -q tests -p no:cacheprovider` -> 179 passed, 6 skipped.
