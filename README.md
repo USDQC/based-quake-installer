@@ -5,6 +5,7 @@ Installs unezQuake and FTE with a set of classic QuakeWorld mods, binds already 
 ## Features
 
 - unezQuake and FTE, each in its own folder, with the Quake shareware data
+- Settings: install unezQuake, FTE or both, in the default folders or your own, and choose what to remember
 - Ten classic mods: Team Fortress, Thunderwalker CTF, Rocket Arena, PainKeep, Headhunters, AirQuake, Future vs Fantasy, Quake Rally, Get Rich Quake, Rune Quake
 - Easy key binds for every client and mod: click a box, press a key, and the cfg files are written for you
 - Updates the clients, mods and the installer itself with a click of a button

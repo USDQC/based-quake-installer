@@ -3,8 +3,9 @@ import shutil
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
-from quake_installer import clients, manifest, updater
+from quake_installer import clients, installer, manifest, updater
 from quake_installer.download import DownloadError
 
 
@@ -152,6 +153,74 @@ class ClientInstallTests(unittest.TestCase):
         self.assertEqual(open(os.path.join(dst, "fteqw64.exe")).read(), "new-exe")
         self.assertEqual(open(os.path.join(dst, "fte", "config.cfg")).read(), "mine")
         self.assertEqual(open(os.path.join(dst, "default.fmf")).read(), "game stock")
+
+
+class _QuietRep(object):
+    def log(self, msg):
+        pass
+
+    def step(self, *args):
+        pass
+
+    def progress(self, *args):
+        pass
+
+
+class EngineFilterTests(unittest.TestCase):
+    # CH - Check for updates follows the Settings engine choice: skipped engines get
+    # no rows and their mods are not offered/updated.
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _opts(self, **kwargs):
+        return installer.Options(self.tmp, "p", "soft", platform="windows", **kwargs)
+
+    def _check(self, opts, specs):
+        return updater.check_updates(
+            self.tmp, "windows", specs=specs, log=lambda *a: None, opts=opts,
+            resolve_unez=lambda p: {"version": "2.1", "url": "u"},
+            resolve_fte=lambda p: {"version": "1.0", "url": "f"})
+
+    def test_unselected_engine_has_no_row(self):
+        items = self._check(self._opts(install_fte=False), [])
+        self.assertEqual([i.component for i in items], ["client:unez"])
+
+    def test_mods_for_unselected_engine_are_skipped(self):
+        specs = [
+            {"key": "fvf", "title": "FvF", "gamedir": "fvf", "clients": ["fte"],
+             "version": "1", "url": "https://drive.google.com/file/d/x/view",
+             "sha256": "aa" * 32},
+            {"key": "painkeep", "title": "PainKeep", "gamedir": "painkeep",
+             "clients": ["fte", "unez"], "version": "1",
+             "url": "https://drive.google.com/file/d/p/view", "sha256": "bb" * 32},
+        ]
+        items = self._check(self._opts(install_fte=False), specs)
+        comps = [i.component for i in items]
+        self.assertNotIn("mod:fvf", comps)
+        self.assertIn("mod:painkeep", comps)
+
+    def test_mod_presence_uses_custom_target_not_the_root(self):
+        opts = self._opts(install_unez=True, install_fte=False,
+                          unez_target=os.path.join(self.tmp, "ezquake"))
+        spec = {"key": "painkeep", "gamedir": "painkeep", "clients": ["unez"]}
+        os.makedirs(os.path.join(self.tmp, "ezquake", "painkeep"))
+        open(os.path.join(self.tmp, "ezquake", "painkeep", "progs.dat"), "w").close()
+        os.makedirs(os.path.join(self.tmp, "unezQuake", "painkeep"))
+        open(os.path.join(self.tmp, "unezQuake", "painkeep", "progs.dat"), "w").close()
+        self.assertTrue(updater._mod_present(self.tmp, spec, opts))
+        # The default root tree is ignored when a custom target is configured.
+        opts.unez_target = os.path.join(self.tmp, "elsewhere")
+        self.assertFalse(updater._mod_present(self.tmp, spec, opts))
+
+    def test_apply_updates_drops_unselected_engine(self):
+        item = updater.UpdateItem("client:fte", "FTE", manifest.STATUS_OUTDATED)
+        with mock.patch.object(updater.download, "download",
+                               side_effect=AssertionError("must not download")):
+            up, failed = updater.apply_updates(self._opts(install_fte=False), [item], _QuietRep())
+        self.assertEqual((up, failed), ([], []))
 
 
 if __name__ == "__main__":
