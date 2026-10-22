@@ -77,6 +77,85 @@ def select_components(items, mode=SELECT_MODE_DEFAULT):
     return chosen
 
 
+# CH - Human summary for Check for updates: engines and mods are reported
+# separately, and "up to date" is never claimed when a check failed.
+_ENGINE_NAMES = {"client:unez": "unezQuake", "client:fte": "FTE"}
+_ENGINE_PHRASES = {
+    manifest.STATUS_OK: "up to date",
+    manifest.STATUS_OUTDATED: "update available",
+    manifest.STATUS_MISSING: "not installed",
+    manifest.STATUS_ERROR: "check failed",
+    manifest.STATUS_UNAVAILABLE: "no build for this platform",
+    manifest.STATUS_PLATFORM: "installed for another platform",
+}
+
+
+def _join_names(names):
+    names = list(names)
+    if len(names) <= 1:
+        return "".join(names)
+    if len(names) == 2:
+        return "%s and %s" % (names[0], names[1])
+    return "%s and %s" % (", ".join(names[:-1]), names[-1])
+
+
+def check_summary(items):
+    """Return (headline, lines) describing an update check at a glance.
+
+    "not installed" counts as an available install/update; a failed check or an
+    unavailable build only asks for attention, so it never says "up to date".
+    """
+    items = list(items)
+    if not items:
+        return "Nothing to check.", []
+    engines = [i for i in items if i.component.startswith("client:")]
+    mods = [i for i in items if i.component.startswith("mod:")]
+    lines = []
+    if engines:
+        names = [_ENGINE_NAMES.get(i.component, i.title) for i in engines]
+        if all(i.status == manifest.STATUS_OK for i in engines):
+            verb = "is" if len(names) == 1 else "are"
+            lines.append("Engines: %s %s up to date." % (_join_names(names), verb))
+        else:
+            phrases = ["%s %s" % (_ENGINE_NAMES.get(i.component, i.title),
+                                  _ENGINE_PHRASES.get(i.status, i.status))
+                       for i in engines]
+            lines.append("Engines: %s." % "; ".join(phrases))
+    if mods:
+        if all(i.status == manifest.STATUS_OK for i in mods):
+            lines.append("Mods: all up to date (%d)." % len(mods))
+        else:
+            parts = []
+
+            def add(n, one, many):
+                if n:
+                    parts.append(one if n == 1 else many % n)
+
+            add(sum(1 for i in mods if i.status == manifest.STATUS_OUTDATED),
+                "1 update available", "%d updates available")
+            add(sum(1 for i in mods if i.status == manifest.STATUS_MISSING),
+                "1 not installed", "%d not installed")
+            add(sum(1 for i in mods if i.status == manifest.STATUS_ERROR),
+                "1 check failed", "%d checks failed")
+            add(sum(1 for i in mods if i.status == manifest.STATUS_UNAVAILABLE),
+                "1 without a build for this platform",
+                "%d without a build for this platform")
+            add(sum(1 for i in mods if i.status == manifest.STATUS_PLATFORM),
+                "1 for another platform", "%d for another platform")
+            lines.append("Mods: %s." % ", ".join(parts))
+    has_updates = any(i.status in (manifest.STATUS_OUTDATED, manifest.STATUS_MISSING)
+                      for i in items)
+    has_issues = any(i.status in (manifest.STATUS_ERROR, manifest.STATUS_UNAVAILABLE,
+                                  manifest.STATUS_PLATFORM) for i in items)
+    if has_updates:
+        headline = "Updates available."
+    elif has_issues:
+        headline = "No updates available, but some checks need attention."
+    else:
+        headline = "Everything is up to date."
+    return headline, lines
+
+
 def _describe(meta):
     if not meta:
         return ""

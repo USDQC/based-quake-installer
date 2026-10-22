@@ -317,5 +317,58 @@ class EngineFilterTests(unittest.TestCase):
         self.assertEqual((up, failed), ([], []))
 
 
+class SummaryTests(unittest.TestCase):
+    # CH - The dialog headline/group lines must never claim "up to date" when a
+    # check failed, and missing mods stay separate from updates.
+    def _item(self, component, status, title="T"):
+        return updater.UpdateItem(component, title, status)
+
+    def test_empty(self):
+        self.assertEqual(updater.check_summary([]), ("Nothing to check.", []))
+
+    def test_all_up_to_date(self):
+        items = [self._item("client:unez", manifest.STATUS_OK),
+                 self._item("client:fte", manifest.STATUS_OK),
+                 self._item("mod:a", manifest.STATUS_OK),
+                 self._item("mod:b", manifest.STATUS_OK)]
+        headline, lines = updater.check_summary(items)
+        self.assertEqual(headline, "Everything is up to date.")
+        self.assertEqual(lines, ["Engines: unezQuake and FTE are up to date.",
+                                 "Mods: all up to date (2)."])
+
+    def test_mixed_updates_and_missing(self):
+        items = [self._item("client:unez", manifest.STATUS_OUTDATED),
+                 self._item("client:fte", manifest.STATUS_OK),
+                 self._item("mod:a", manifest.STATUS_OUTDATED),
+                 self._item("mod:b", manifest.STATUS_MISSING)]
+        headline, lines = updater.check_summary(items)
+        self.assertEqual(headline, "Updates available.")
+        self.assertEqual(lines, ["Engines: unezQuake update available; FTE up to date.",
+                                 "Mods: 1 update available, 1 not installed."])
+
+    def test_issues_only_never_says_up_to_date(self):
+        items = [self._item("client:fte", manifest.STATUS_ERROR),
+                 self._item("mod:a", manifest.STATUS_UNAVAILABLE),
+                 self._item("mod:b", manifest.STATUS_PLATFORM)]
+        headline, lines = updater.check_summary(items)
+        self.assertEqual(headline,
+                         "No updates available, but some checks need attention.")
+        self.assertIn("Engines: FTE check failed.", lines)
+        self.assertIn("Mods: 1 without a build for this platform, "
+                      "1 for another platform.", lines)
+
+    def test_mods_only_has_no_engine_line(self):
+        headline, lines = updater.check_summary(
+            [self._item("mod:a", manifest.STATUS_OUTDATED)])
+        self.assertEqual(headline, "Updates available.")
+        self.assertEqual(lines, ["Mods: 1 update available."])
+
+    def test_one_engine_uses_is(self):
+        headline, lines = updater.check_summary(
+            [self._item("client:fte", manifest.STATUS_OK)])
+        self.assertEqual(headline, "Everything is up to date.")
+        self.assertEqual(lines, ["Engines: FTE is up to date."])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -144,3 +144,33 @@ Branch: `feat/settings` (from `main` @ f4d92f4; worklog brought over from `feat/
   commits; this is the branch to review and the one BQICH is built from.
 - Old feature branches and local `test/settings+updates` stay until the PR is
   merged, then can be deleted.
+
+## 2026-10-22 - ToBeDone pass (fit, hint, update summary)
+
+### Decisions
+- "Launcher" in the list = the engines (unezQuake/FTE); the installer self-update
+  stays separate.
+- Summary reads as a headline plus two group lines (Engines, Mods).
+- Screen fit handled adaptively: main window scrolls; Settings content scrolls
+  with a fixed Save/Cancel footer.
+
+### Implementation
+- `gui.py`:
+  - main content is inside a canvas + always-visible scrollbar (wheel support,
+    Text/Combobox keep their own wheel); dynamic `minsize` and
+    `center_window(..., margin_x=24, margin_y=72)` keep it on-screen.
+  - Settings sections live in `_scrollable()`; footer outside so it never clips.
+  - new pure `paths_hint()`; hint moved below the mode frames so it works in both
+    modes and wraps on resize.
+  - Check for updates shows `updater.check_summary()` headline + Engines/Mods lines.
+- `updater.py`: `check_summary()` (missing counts as available, errors/platform
+  never claim "up to date").
+- Tests: `tests/test_paths_hint.py`, summary cases in `tests/test_updates.py`.
+- Docs: manual update chapter mentions the summary; `ToBeDone.md` checked off.
+
+### Verification
+- `python -m pytest -q tests -p no:cacheprovider` -> 197 passed, 6 skipped.
+- Tk smokes pass (Settings/cog, selectable update dialog, summary lines).
+- Fit measurement at Tk scaling 1.0/1.333/1.5/2.0 on a 1536x864 desktop: main
+  window opens within margins and content scrolls; Settings fits and scrolls.
+- Rebuilt `dist\BQICH.exe` and `--self-test` exit 0.

@@ -521,7 +521,7 @@ A source only counts when it is ticked, so the installer also adds `sb_sourcemar
 
 ![The "Check for updates" result window.](img/update-check.png)
 
-Click **Check for updates** on an existing install. The installer reads its record of what it installed (`based-quake-manifest.json` in your install folder) and compares it with what's online:
+Click **Check for updates** on an existing install. The installer reads its record of what it installed (`based-quake-manifest.json` in your install folder) and compares it with what's online. The window starts with a summary (for example **Engines: unezQuake and FTE are up to date.** and **Mods: 2 updates available.**); if a check failed it says so instead of claiming everything is up to date.
 
 | Component | How it's checked |
 |---|---|
