@@ -3,7 +3,7 @@
 Build-time helper, like render_radios.py: Pillow is needed only to regenerate the
 PNGs, never at run time. Run from the repo root:
 
-    python manual/render_gear.py
+    python tools/render_gear.py
 """
 
 import math

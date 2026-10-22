@@ -14,6 +14,7 @@ stage() {  # stage <dir> [extra files...]
 }
 # Windows (flat tree)
 stage "$T/win" tools build_exe.bat run_installer.bat requirements-build.txt
+rm -f "$T/win/tools/"render_*.py  # icon generators are only needed when editing icons
 rm -f "$OUT/based-quake-installer-source-windows.zip"; (cd "$T/win" && zip -qr "$OUT/based-quake-installer-source-windows.zip" .)
 
 # Linux launcher

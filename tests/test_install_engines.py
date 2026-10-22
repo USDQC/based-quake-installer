@@ -29,8 +29,8 @@ class OptionsTests(unittest.TestCase):
                                  install_unez=True, install_fte=False)
         self.assertEqual(opts.unez_dir, os.path.join("C:/Games", "unezQuake"))
         self.assertIsNone(opts.fte_dir)
-        self.assertTrue(opts.uses_unez)
-        self.assertFalse(opts.uses_fte)
+        self.assertTrue(opts.install_unez)
+        self.assertFalse(opts.install_fte)
 
     def test_custom_targets_win_over_the_root(self):
         opts = installer.Options("C:/Games", "p", "soft", platform="windows",

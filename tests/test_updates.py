@@ -156,7 +156,7 @@ class ClientInstallTests(unittest.TestCase):
 
 
 class SelectionTests(unittest.TestCase):
-    # CH - The dialog only lets users check rows apply_updates() can install, and the
+    # The dialog only lets users check rows apply_updates() can install, and the
     # default never picks "not installed" mods on its own.
     def _items(self):
         return [
@@ -210,7 +210,7 @@ class _Rep(object):
 
 
 class ApplySubsetTests(unittest.TestCase):
-    # CH - Selecting a subset must leave every unchecked component untouched.
+    # Selecting a subset must leave every unchecked component untouched.
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
 
@@ -261,7 +261,7 @@ class ApplySubsetTests(unittest.TestCase):
 
 
 class EngineFilterTests(unittest.TestCase):
-    # CH - Check for updates follows the Settings engine choice: skipped engines get
+    # Check for updates follows the Settings engine choice: skipped engines get
     # no rows and their mods are not offered/updated.
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -318,7 +318,7 @@ class EngineFilterTests(unittest.TestCase):
 
 
 class SummaryTests(unittest.TestCase):
-    # CH - The dialog headline/group lines must never claim "up to date" when a
+    # The dialog headline/group lines must never claim "up to date" when a
     # check failed, and missing mods stay separate from updates.
     def _item(self, component, status, title="T"):
         return updater.UpdateItem(component, title, status)

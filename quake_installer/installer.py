@@ -10,7 +10,8 @@ import os
 import shutil
 import tempfile
 
-from . import cfg, clients, download, extract, launchers, manifest, mods as modlib, sb_sources
+from . import (cfg, clients, download, extract, folders, launchers, manifest, mods as modlib,
+               sb_sources)
 from .constants import (
     FTE_DIRNAME, FTE_EXE_BY_PLATFORM, PAK0_MD5, PAK0_SIZE, PROTECTED_FILES, SHAREWARE_URLS,
     UNEZ_DIRNAME, UNEZ_EXE_BY_PLATFORM, host_platform,
@@ -33,7 +34,7 @@ class Options(object):
                  unez_target=None, fte_target=None):
         self.root = root
         # existing=True: "Mods only (existing clients)". unez_path / fte_path are the
-        # user's own client folders (None = skip that client); fte_cfg_dir is FTE's
+        # user's own client folders (None when that client isn't used); fte_cfg_dir is FTE's
         # effective write dir (home dir or install dir, see existing.py).
         self.existing = bool(existing)
         self.unez_path = unez_path or None
@@ -41,7 +42,7 @@ class Options(object):
         self.fte_cfg_dir = fte_cfg_dir or None
         self.player_name = player_name
         self.look = look
-        # binds: dict action_id -> key. Blank/missing skipped. Legacy CLI can pass
+        # binds: dict action_id -> key; actions without a key are left unbound. Legacy CLI can pass
         # movement/weapons instead and we expand them via presets.
         if binds is not None:
             self.binds = dict(binds)
@@ -58,20 +59,12 @@ class Options(object):
         self.mod_binds = dict(mod_binds or {})
         # Client platform whose engine builds get installed (always the running OS: windows/linux).
         self.platform = platform or host_platform()
-        # CH - Full installs can pick engines and their folders (Settings dialog).
-        # A skipped engine's *_dir is None, so mods/cfgs never land in that tree.
+        # Full installs can pick engines and their folders (Settings dialog). An
+        # engine that is turned off has no *_dir, so mods/cfgs never land in its tree.
         self.install_unez = bool(install_unez)
         self.install_fte = bool(install_fte)
         self.unez_target = unez_target or None
         self.fte_target = fte_target or None
-
-    @property
-    def uses_unez(self):
-        return self.install_unez
-
-    @property
-    def uses_fte(self):
-        return self.install_fte
 
     @property
     def unez_dir(self):
@@ -95,6 +88,30 @@ class Options(object):
         if self.existing and self.fte_path:
             return self.fte_cfg_dir or self.fte_path
         return self.fte_dir
+
+    def check_folders(self):
+        """Raise InstallError when the engine folders would overlap or nest."""
+        try:
+            if self.existing:
+                folders.check_existing_folders(self.unez_path, self.fte_path)
+            else:
+                folders.check_engine_folders(self.root, self.unez_dir, self.fte_dir)
+        except folders.FolderError as exc:
+            raise InstallError(str(exc))
+
+    def use_manifest_dirs(self, override=False):
+        """Take the engine folders recorded in {root}'s manifest.
+
+        override=False: only where no folder was chosen (Install). override=True:
+        always (updates follow what is really installed). Old manifests without
+        the "engine_dirs" key change nothing."""
+        if self.existing or not self.root:
+            return
+        recorded = manifest.engine_dirs(manifest.load(self.root))
+        if recorded.get("unez") and (override or not self.unez_target):
+            self.unez_target = recorded["unez"]
+        if recorded.get("fte") and (override or not self.fte_target):
+            self.fte_target = recorded["fte"]
 
     def cfg_dir_for(self, label, data_dir):
         """Map a client gamedir (data) path to the folder its cfgs go into."""
@@ -308,8 +325,10 @@ def run_install(opts, rep=None, cancel_event=None):
     if not root or root in (".",):
         raise InstallError("Please choose an install folder.")
     opts.root = root
-    if not opts.uses_unez and not opts.uses_fte:
+    if not opts.install_unez and not opts.install_fte:
         raise InstallError("Choose at least one engine to install (Settings).")
+    opts.use_manifest_dirs()
+    opts.check_folders()
 
     dirs = [root]
     for d in (opts.unez_dir, opts.fte_dir):
@@ -336,6 +355,7 @@ def run_install(opts, rep=None, cancel_event=None):
                 rep.step(2, steps, "Installing all configured mods")
                 man = manifest.load(root)
                 install_mods(opts, rep, result, work, cancel_event, man=man)
+                manifest.record_engines(man, opts)
                 result.manifest_path = manifest.save(root, man)
                 write_mod_configs(opts, rep, result)
             finally:
@@ -405,6 +425,7 @@ def run_install(opts, rep=None, cancel_event=None):
 
         rep.step(7, steps, "Configuring FTE (default.fmf / DISABLEHOMEDIR)")
         _configure_fte(opts, rep, result)
+        manifest.record_engines(man, opts)
         result.manifest_path = manifest.save(root, man)
         rep.log("  wrote %s" % result.manifest_path)
         return result
@@ -459,43 +480,31 @@ def install_fte_build(opts, rep, result, work, man, meta, cancel_event=None):
 def install_clients(opts, rep, result, work, man, cancel_event=None, step_base=1, steps=7):
     """Install the selected engines for opts.platform; skip (clearly) when no build exists."""
     label = clients.platform_label(opts.platform)
-    rep.step(step_base, steps, "Downloading unezQuake (%s)" % label)
-    if not opts.uses_unez:
-        rep.log("  unezQuake not selected in Settings; skipped")
-    else:
+    engines = (
+        ("unezQuake", opts.install_unez, clients.resolve_unez, install_unez_build,
+         "Cannot reach unezQuake releases: %s", ""),
+        ("FTE", opts.install_fte, clients.resolve_fte, install_fte_build,
+         "Cannot reach FTE builds: %s", " (FTE mods need another platform)"),
+    )
+    for n, (name, selected, resolve, install, unreachable, note) in enumerate(engines):
+        rep.step(step_base + n, steps, "Downloading %s (%s)" % (name, label))
+        if not selected:
+            rep.log("  %s is turned off in Settings, so it isn't installed." % name)
+            continue
         try:
-            meta = clients.resolve_unez(opts.platform)
+            meta = resolve(opts.platform)
         except DownloadError as exc:
-            raise InstallError("Cannot reach unezQuake releases: %s" % exc)
+            raise InstallError(unreachable % exc)
         if meta is None:
-            msg = "no unezQuake build published for %s; skipped" % label
+            msg = "no %s build published for %s; skipped%s" % (name, label, note)
             rep.log("  WARN: " + msg)
-            result.skipped_clients.append(("unezQuake", msg))
+            result.skipped_clients.append((name, msg))
             result.warnings.append(msg)
-        else:
-            try:
-                install_unez_build(opts, rep, result, work, man, meta, cancel_event)
-            except clients.ClientError as exc:
-                raise InstallError(str(exc))
-
-    rep.step(step_base + 1, steps, "Downloading FTE (%s)" % label)
-    if not opts.uses_fte:
-        rep.log("  FTE not selected in Settings; skipped")
-    else:
+            continue
         try:
-            meta = clients.resolve_fte(opts.platform)
-        except DownloadError as exc:
-            raise InstallError("Cannot reach FTE builds: %s" % exc)
-        if meta is None:
-            msg = "no FTE build published for %s; skipped (FTE mods need another platform)" % label
-            rep.log("  WARN: " + msg)
-            result.skipped_clients.append(("FTE", msg))
-            result.warnings.append(msg)
-        else:
-            try:
-                install_fte_build(opts, rep, result, work, man, meta, cancel_event)
-            except clients.ClientError as exc:
-                raise InstallError(str(exc))
+            install(opts, rep, result, work, man, meta, cancel_event)
+        except clients.ClientError as exc:
+            raise InstallError(str(exc))
 
 
 def install_mods(opts, rep, result, work, cancel_event=None, man=None):
@@ -613,10 +622,11 @@ def run_existing(opts, rep, cancel_event=None):
     result = Result()
     if not opts.unez_dir and not opts.fte_dir:
         raise InstallError("Choose an existing unezQuake folder and/or an FTE folder.")
+    opts.check_folders()
     for label, d, check in (("unezQuake", opts.unez_dir, existing.check_unez_folder),
                             ("FTE", opts.fte_dir, existing.check_fte_folder)):
         if not d:
-            rep.log("%-13s: (skipped)" % label)
+            rep.log("%-13s: (not used)" % label)
             continue
         if not os.path.isdir(d):
             raise InstallError("%s folder does not exist: %s" % (label, d))
@@ -671,7 +681,7 @@ def _configure_fte(opts, rep, result):
     if not result.unez_exe:
         result.unez_exe = find_unez(opts)
     if not opts.fte_dir:
-        rep.log("  FTE not selected in Settings; default.fmf skipped")
+        rep.log("  FTE is turned off in Settings, so default.fmf isn't written.")
         return
     path = launchers.ensure_fte_default_fmf(opts.fte_dir, log=rep.log)
     result.fte_fmf = path

@@ -22,7 +22,7 @@ from .constants import (APP_TITLE, DEFAULT_ROOT, FTE_DIRNAME, LOOK_GL, LOOK_SOFT
                         MAX_NAME_LEN, PLATFORM_LABELS, UNEZ_DIRNAME, host_platform)
 from .installer import Cancelled, InstallError, Options, Reporter, run_install
 from .paths import IS_WINDOWS
-from . import existing as existing_mod
+from . import existing as existing_mod, folders
 
 MODE_FULL = "full"
 MODE_EXISTING = "existing"
@@ -82,7 +82,7 @@ def center_window(win, parent=None, margin_x=0, margin_y=0):
 def paths_hint(existing, root, install_unez=True, install_fte=True,
                unez_target="", fte_target="", unez_path="", fte_path="",
                exists=os.path.isdir):
-    """CH - Folder hint under the install-mode row; pure so it is unit tested."""
+    """Folder hint under the install-mode row; pure so it is unit tested."""
     def clean(p):
         p = str(p or "").strip().strip('"')
         return os.path.normpath(os.path.expanduser(p)) if p else ""
@@ -102,7 +102,7 @@ def paths_hint(existing, root, install_unez=True, install_fte=True,
     if install_fte:
         paths.append(mark(clean(fte_target) or os.path.join(root_dir, FTE_DIRNAME)))
     if not paths:
-        return "No engine selected - open Settings."
+        return "No engine is turned on. Open Settings to choose one."
     return "Installs to: " + " and ".join(paths)
 
 
@@ -386,7 +386,7 @@ class InstallerApp(object):
         self.var_root = tk.StringVar(value=DEFAULT_ROOT)
         self.var_name = tk.StringVar(value="player")
         self.var_look = tk.StringVar(value=LOOK_SOFT)
-        # CH - Settings: which engines a full install creates, where, and whether the
+        # Settings: which engines a full install creates, where, and whether the
         # folder fields are remembered between runs (all on by default).
         self.var_install_unez = tk.BooleanVar(value=True)
         self.var_install_fte = tk.BooleanVar(value=True)
@@ -394,6 +394,8 @@ class InstallerApp(object):
         self.var_fte_target = tk.StringVar()
         self.var_remember_dirs = tk.BooleanVar(value=True)
         self._gear_cache = {}
+        self.settings_window = None
+        self.update_window = None
         self.platform = host_platform()  # always the OS we run on
         self.var_status = tk.StringVar(value="Ready.")
         self.var_paths = tk.StringVar()
@@ -416,6 +418,7 @@ class InstallerApp(object):
         self.var_install_unez.trace_add("write", lambda *a: self._update_paths())
         self.var_install_fte.trace_add("write", lambda *a: self._update_paths())
         self.var_fte.trace_add("write", lambda *a: self._update_fte_cfg())
+        self.var_unez.trace_add("write", lambda *a: self._update_fte_cfg())
         self.var_unez.trace_add("write", lambda *a: self._update_paths())
         self.var_fte.trace_add("write", lambda *a: self._update_paths())
         self._update_paths()
@@ -458,26 +461,34 @@ class InstallerApp(object):
     # ------------------------------------------------------------------ layout
     def _build(self):
         pad = {"padx": 6, "pady": 3}
-        # CH - The main window scrolls if DPI scaling makes it taller than the
+        # The main window scrolls if DPI scaling makes it taller than the
         # screen; the scrollbar is always visible so the layout never clips.
         shell = ttk.Frame(self.root)
         shell.pack(fill="both", expand=True)
         shell.rowconfigure(0, weight=1)
         shell.columnconfigure(0, weight=1)
         self.main_canvas = tk.Canvas(shell, highlightthickness=0)
+        self.canvases.append(self.main_canvas)  # _recolor keeps it on the theme colour
         self.main_scroll = ttk.Scrollbar(shell, orient="vertical",
                                          command=self.main_canvas.yview)
         self.main_canvas.configure(yscrollcommand=self.main_scroll.set)
         self.main_canvas.grid(row=0, column=0, sticky="nsew")
         self.main_scroll.grid(row=0, column=1, sticky="ns")
-        outer = ttk.Frame(self.main_canvas, padding=10)
-        self.main_window = self.main_canvas.create_window((0, 0), window=outer,
+        # holder fills the whole visible canvas; outer sits at its top and keeps its
+        # natural height, so growing or shrinking content re-triggers _sync.
+        holder = ttk.Frame(self.main_canvas)
+        holder.pack_propagate(False)
+        outer = ttk.Frame(holder, padding=10)
+        outer.pack(side="top", fill="x", anchor="n")
+        self.main_window = self.main_canvas.create_window((0, 0), window=holder,
                                                           anchor="nw")
 
         def _sync(_e=None):
+            # Fill the visible area too, so no bare canvas shows below the content.
+            self.main_canvas.itemconfigure(
+                self.main_window, width=self.main_canvas.winfo_width(),
+                height=max(outer.winfo_reqheight(), self.main_canvas.winfo_height()))
             self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
-            self.main_canvas.itemconfigure(self.main_window,
-                                           width=self.main_canvas.winfo_width())
 
         outer.bind("<Configure>", _sync)
         self.main_canvas.bind("<Configure>", _sync)
@@ -497,7 +508,7 @@ class InstallerApp(object):
             head, style="Muted.TLabel",
             text="Installs unezQuake, FTE and classic QuakeWorld mods."
         ).pack(side="left")
-        # CH - Settings lives behind the cog (theme + update check moved inside).
+        # Settings lives behind the cog (theme + update check moved inside).
         self.btn_settings = ttk.Button(head, image=self._gear_image(),
                                        command=self._open_settings)
         self.btn_settings.pack(side="left", padx=(12, 0))
@@ -525,7 +536,7 @@ class InstallerApp(object):
         self.ent_root.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         self.btn_browse = ttk.Button(self.frm_full, text="Browse...", command=self._browse)
         self.btn_browse.grid(row=0, column=1)
-        # mods only: the user's own client folders (blank = skip that client)
+        # mods only: the user's own client folders (leave one empty if you don't have it)
         self.frm_exist = ttk.Frame(f)
         self.frm_exist.grid(row=1, column=0, columnspan=2, sticky="ew")
         self.frm_exist.columnconfigure(1, weight=1)
@@ -541,7 +552,7 @@ class InstallerApp(object):
             self.exist_widgets += [ent, btn]
         ttk.Label(self.frm_exist, textvariable=self.var_fte_cfg, style="Muted.TLabel").grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
-        # CH - One hint line for both modes; wraps instead of widening the window.
+        # One hint line for both modes; wraps instead of widening the window.
         self.lbl_paths = ttk.Label(f, textvariable=self.var_paths, style="Muted.TLabel",
                                    justify="left")
         self.lbl_paths.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
@@ -793,7 +804,7 @@ class InstallerApp(object):
     def _open_settings(self):
         if self.worker and self.worker.is_alive():
             return
-        old = getattr(self, "settings_window", None)
+        old = self.settings_window
         try:
             if old is not None and old.winfo_exists():
                 old.lift()
@@ -801,168 +812,9 @@ class InstallerApp(object):
                 return
         except tk.TclError:
             pass
-        win = tk.Toplevel(self.root)
-        win.title("Settings")
-        win.transient(self.root)
-        win.bind("<Escape>", lambda _e: win.destroy())
-        frm = ttk.Frame(win, padding=12)
-        frm.pack(fill="both", expand=True)
-        frm.columnconfigure(0, weight=1)
-        frm.rowconfigure(0, weight=1)
-        # CH - Settings content scrolls; Save/Cancel stay in a fixed footer so no
-        # controls are clipped on small screens or at high DPI scaling.
-        body = ttk.Frame(frm)
-        body.grid(row=0, column=0, sticky="nsew")
-        inner = self._scrollable(
-            body, height=max(360, min(620, self.root.winfo_screenheight() - 260)))
-        inner.columnconfigure(0, weight=1)
-
-        v_unez = tk.BooleanVar(value=self.var_install_unez.get())
-        v_fte = tk.BooleanVar(value=self.var_install_fte.get())
-        v_unez_path = tk.StringVar(value=self.var_unez_target.get())
-        v_fte_path = tk.StringVar(value=self.var_fte_target.get())
-        v_remember = tk.BooleanVar(value=self.var_remember_dirs.get())
-        v_self = tk.BooleanVar(value=self.var_self_auto.get())
-        v_theme = tk.StringVar(value=self.var_theme.get())
-
-        eng = ttk.LabelFrame(inner, text="Engines (full install)", padding=8)
-        eng.grid(row=0, column=0, sticky="ew")
-        eng.columnconfigure(1, weight=1)
-        hint_u = tk.StringVar()
-        hint_f = tk.StringVar()
-        ent_u = ttk.Entry(eng, textvariable=v_unez_path)
-        ent_f = ttk.Entry(eng, textvariable=v_fte_path)
-        btn_u = ttk.Button(eng, text="Browse...",
-                           command=lambda: _browse(v_unez_path, "unez"))
-        btn_f = ttk.Button(eng, text="Browse...",
-                           command=lambda: _browse(v_fte_path, "fte"))
-
-        def _browse(var, kind):
-            d = filedialog.askdirectory(
-                title="Choose the %s folder" % ("unezQuake" if kind == "unez" else "FTE"),
-                initialdir=var.get() if os.path.isdir(var.get()) else None,
-                mustexist=False, parent=win)
-            if d:
-                var.set(os.path.normpath(d))
-                _hints()
-
-        def _root_dir():
-            p = os.path.expanduser(self.var_root.get().strip().strip('"'))
-            return p or DEFAULT_ROOT
-
-        def _effective(var, name):
-            p = os.path.expanduser(var.get().strip().strip('"'))
-            return os.path.normpath(p) if p else os.path.join(_root_dir(), name)
-
-        def _hints():
-            hint_u.set("-> " + _effective(v_unez_path, UNEZ_DIRNAME))
-            hint_f.set("-> " + _effective(v_fte_path, FTE_DIRNAME))
-
-        def _sync():
-            for on, ent, btn in ((v_unez, ent_u, btn_u), (v_fte, ent_f, btn_f)):
-                state = "normal" if on.get() else "disabled"
-                ent.configure(state=state)
-                btn.configure(state=state)
-            _hints()
-
-        for row, (label, var, ent, btn, hint) in enumerate((
-                ("unezQuake", v_unez, ent_u, btn_u, hint_u),
-                ("FTE", v_fte, ent_f, btn_f, hint_f))):
-            ttk.Checkbutton(eng, text=label, variable=var, command=_sync).grid(
-                row=row * 2, column=0, sticky="w", pady=(0, 2 if row == 0 else 0))
-            ent.grid(row=row * 2, column=1, sticky="ew", padx=6,
-                     pady=(0, 2 if row == 0 else 0))
-            btn.grid(row=row * 2, column=2, pady=(0, 2 if row == 0 else 0))
-            ttk.Label(eng, textvariable=hint, style="Muted.TLabel").grid(
-                row=row * 2 + 1, column=1, columnspan=2, sticky="w", padx=6,
-                pady=(0, 6 if row == 0 else 0))
-        ttk.Label(eng, style="Muted.TLabel", wraplength=560, justify="left",
-                  text="Leave a folder blank to use the install folder. An existing "
-                       "folder is reused; your cfgs are never overwritten. Unchecked "
-                       "engines are not downloaded, updated, or given mods."
-                  ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
-
-        fold = ttk.LabelFrame(inner, text="Folders", padding=8)
-        fold.grid(row=1, column=0, sticky="ew", pady=(8, 0))
-        ttk.Checkbutton(fold, text="Remember install directory and client folders",
-                        variable=v_remember).pack(anchor="w")
-        ttk.Label(fold, style="Muted.TLabel", wraplength=560, justify="left",
-                  text="Off: the installer starts from the default folder every time "
-                       "(your name, binds and look are still remembered).").pack(anchor="w")
-
-        look = ttk.LabelFrame(inner, text="Appearance", padding=8)
-        look.grid(row=2, column=0, sticky="ew", pady=(8, 0))
-        row = ttk.Frame(look)
-        row.pack(fill="x")
-        ttk.Label(row, text="Theme:").pack(side="left")
-        ttk.Combobox(row, textvariable=v_theme, state="readonly", width=10,
-                     values=[label for _k, label in THEMES]).pack(side="left", padx=(6, 0))
-
-        upd = ttk.LabelFrame(inner, text="Installer updates", padding=8)
-        upd.grid(row=3, column=0, sticky="ew", pady=(8, 0))
-        ttk.Checkbutton(upd, text="Check for a new installer when it starts",
-                        variable=v_self).pack(anchor="w")
-        ttk.Label(upd, style="Muted.TLabel", wraplength=560, justify="left",
-                  text="Check only: a small notice appears, nothing is downloaded or "
-                       "replaced until you choose Update now.").pack(anchor="w")
-
-        def _norm(text):
-            t = os.path.expanduser(str(text).strip().strip('"'))
-            return os.path.normpath(t) if t else ""
-
-        def _save():
-            u_on, f_on = v_unez.get(), v_fte.get()
-            if not u_on and not f_on:
-                messagebox.showerror(APP_TITLE, "Choose at least one engine.",
-                                     parent=win)
-                return
-            u, f = _norm(v_unez_path.get()), _norm(v_fte_path.get())
-            for label, p in (("unezQuake", u), ("FTE", f)):
-                if not p:
-                    continue
-                if IS_WINDOWS and not (len(p) >= 3 and p[1] == ":" or p.startswith("\\\\")):
-                    messagebox.showerror(APP_TITLE, "Enter a full %s folder path, "
-                                         "e.g. C:\\Games\\ezquake." % label, parent=win)
-                    return
-                if not IS_WINDOWS and not os.path.isabs(p):
-                    messagebox.showerror(APP_TITLE, "Enter a full %s folder path, "
-                                         "e.g. ~/Games/ezquake." % label, parent=win)
-                    return
-            if u and f and os.path.normcase(u) == os.path.normcase(f):
-                messagebox.showerror(APP_TITLE, "unezQuake and FTE can't share a folder.",
-                                     parent=win)
-                return
-            for label, p, kind in (("unezQuake", u, "unez"), ("FTE", f, "fte")):
-                if not p or not os.path.isdir(p):
-                    continue
-                warn = (existing_mod.check_unez_folder(p) if kind == "unez"
-                        else existing_mod.check_fte_folder(p))
-                if warn and not messagebox.askyesno(
-                        APP_TITLE, "This doesn't look like a %s folder:\n\n%s\n\n"
-                        "Use it anyway?" % (label, "\n".join(warn)), parent=win):
-                    return
-            self.var_install_unez.set(u_on)
-            self.var_install_fte.set(f_on)
-            self.var_unez_target.set(u)
-            self.var_fte_target.set(f)
-            self.var_remember_dirs.set(v_remember.get())
-            self.var_self_auto.set(v_self.get())
-            if v_theme.get() != self.var_theme.get():
-                self.var_theme.set(v_theme.get())
-                self._apply_theme(save=True)
-            settings.save(self._settings_values())
-            self._update_paths()
-            win.destroy()
-
-        bar = ttk.Frame(frm)
-        bar.grid(row=1, column=0, sticky="ew", pady=(10, 0))
-        ttk.Button(bar, text="Save", command=_save).pack(side="right")
-        ttk.Button(bar, text="Cancel", command=win.destroy).pack(side="right", padx=6)
-        ent_u.bind("<KeyRelease>", lambda _e: _hints())
-        ent_f.bind("<KeyRelease>", lambda _e: _hints())
-        _sync()
-        center_window(win, self.root)
-        self.settings_window = win
+        from .settings_dialog import SettingsDialog
+        self.settings_dialog = SettingsDialog(self)
+        self.settings_window = self.settings_dialog.win
 
     # ----------------------------------------------------------------- theme
     def _theme_key(self):
@@ -1015,7 +867,7 @@ class InstallerApp(object):
         except Exception:
             pass
         imgs = getattr(self, "_radio_imgs", [])
-        # Windows 7 style bubbles, pre-rendered by manual/render_radios.py.
+        # Windows 7 style bubbles, pre-rendered by tools/render_radios.py.
         try:
             on, off, hov, dis = self._win7_radio_imgs(size)
         except Exception:
@@ -1167,7 +1019,7 @@ class InstallerApp(object):
             "check_installer_updates": bool(self.var_self_auto.get()),
             "install_mode": self.var_mode.get(),
             "theme": self._theme_key(),
-            # CH - Engine choice is always kept; folder values only when the user
+            # Engine choice is always kept; folder values only when the user
             # wants them remembered (off = defaults next start).
             "remember_dirs": bool(self.var_remember_dirs.get()),
             "install_unez": bool(self.var_install_unez.get()),
@@ -1278,7 +1130,13 @@ class InstallerApp(object):
     def _update_fte_cfg(self):
         d = self.var_fte.get().strip()
         if not d:
-            self.var_fte_cfg.set("FTE: skipped (blank). Mods go into unezQuake only.")
+            self.var_fte_cfg.set(
+                "No FTE folder chosen, so mods will only go into unezQuake."
+                if self.var_unez.get().strip() else "")
+            return
+        if not self.var_unez.get().strip():
+            self.var_fte_cfg.set(
+                "No unezQuake folder chosen, so mods will only go into FTE.")
             return
         det = self._fte_detect()
         if det is None:
@@ -1385,29 +1243,24 @@ class InstallerApp(object):
     # --------------------------------------------------------------- actions
     def _norm_install_target(self, text, label):
         """Settings folder override: None when blank, else a validated full path."""
-        p = os.path.expanduser(str(text).strip().strip('"'))
+        p = folders.clean(text)
         if not p:
             return None
         p = os.path.normpath(p)
-        if IS_WINDOWS and not (len(p) >= 3 and p[1] == ":" or p.startswith("\\\\")):
-            raise ValueError("Enter a full %s folder path, e.g. C:\\Games\\%s."
-                             % (label, label))
-        if not IS_WINDOWS and not os.path.isabs(p):
-            raise ValueError("Enter a full %s folder path, e.g. ~/Games/%s."
-                             % (label, label))
+        if not folders.is_full_path(p):
+            raise ValueError("Enter a full %s folder path, e.g. %s." % (
+                label, ("C:\\Games\\" if IS_WINDOWS else "~/Games/") + label))
         return p
 
     def _collect(self, configs_only, allow_empty_name=False):
         if self._existing_mode():
             return self._collect_existing(configs_only, allow_empty_name)
-        root = self.var_root.get().strip().strip('"')
+        root = folders.clean(self.var_root.get())
         if not root:
             raise ValueError("Please choose an install folder.")
-        if IS_WINDOWS and not (len(root) >= 3 and root[1] == ":" or root.startswith("\\\\")):
-            raise ValueError("Please enter a full path, e.g. C:\\Games")
-        root = os.path.expanduser(root)
-        if not IS_WINDOWS and not os.path.isabs(root):
-            raise ValueError("Please enter a full path, e.g. ~/Games")
+        if not folders.is_full_path(root):
+            raise ValueError("Please enter a full path, e.g. %s"
+                             % ("C:\\Games" if IS_WINDOWS else "~/Games"))
         name = self.var_name.get()
         if not name.strip() and not allow_empty_name:
             raise ValueError("Please enter a player name.")
@@ -1423,7 +1276,7 @@ class InstallerApp(object):
             mod_binds = self._collect_mod_binds()
         except ValueError as exc:
             raise ValueError("Invalid key in mod binds: %s" % exc)
-        return Options(root=root, player_name=name, look=self.var_look.get(),
+        opts = Options(root=root, player_name=name, look=self.var_look.get(),
                        binds=binds, write_bats=False, configs_only=configs_only,
                        mods=None, mod_files={}, mods_only=False, mod_binds=mod_binds,
                        platform=self.platform,
@@ -1433,6 +1286,11 @@ class InstallerApp(object):
                            self.var_unez_target.get(), "ezquake"),
                        fte_target=self._norm_install_target(
                            self.var_fte_target.get(), "FTE"))
+        # Same rules the installer enforces; checked here so the message shows
+        # before anything starts.
+        opts.use_manifest_dirs()
+        folders.check_engine_folders(opts.root, opts.unez_dir, opts.fte_dir)
+        return opts
 
     def _collect_existing(self, configs_only, allow_empty_name=False):
         paths = {}
@@ -1444,6 +1302,7 @@ class InstallerApp(object):
             paths[kind] = os.path.normpath(p) if p else None
         if not paths["unez"] and not paths["fte"]:
             raise ValueError("Choose your existing unezQuake folder and/or FTE folder.")
+        folders.check_existing_folders(paths["unez"], paths["fte"])
         name = self.var_name.get()
         if not name.strip() and not allow_empty_name:
             raise ValueError("Please enter a player name.")
@@ -1501,16 +1360,21 @@ class InstallerApp(object):
             self.q.put(("error", "Update check failed: %s" % exc))
 
     def _show_updates(self, items):
-        # CH - Results are now selectable: every installable component gets a checkbox,
-        # presets cover "all / engines / mods", and only the checked subset is applied.
+        # Every installable component gets a checkbox, presets cover
+        # "all / engines / mods", and only the checked subset is applied.
         self._set_busy(False)
         from . import updater
         headline, summary_lines = updater.check_summary(items)
+        opts = self.last_opts
+        off = updater.turned_off_notes(opts.root, opts) if opts is not None else []
+        summary_lines = list(summary_lines) + off
+        for line in off:
+            self._log("NOTE: " + line)
         for i in items:
             tag = "WARN: " if i.needs_update or i.status not in ("up to date",) else "OK  "
             self._log(tag + i.line())
         self.var_status.set(headline)
-        old = getattr(self, "update_window", None)
+        old = self.update_window
         if old is not None and old.winfo_exists():
             old.destroy()
         win = tk.Toplevel(self.root)
