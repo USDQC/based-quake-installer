@@ -171,8 +171,13 @@ Branch: `feat/settings` (from `main` @ f4d92f4; worklog brought over from `feat/
 - Docs: manual update chapter mentions the summary; `ToBeDone.md` checked off.
 
 ### Verification
-- `python -m pytest -q tests -p no:cacheprovider` -> 197 passed, 6 skipped.
+- `python -m pytest -q tests -p no:cacheprovider` -> 198 passed, 6 skipped.
 - Tk smokes pass (Settings/cog, selectable update dialog, summary lines).
 - Fit measurement at Tk scaling 1.0/1.333/1.5/2.0 on a 1536x864 desktop: main
   window opens within margins and content scrolls; Settings fits and scrolls.
 - Rebuilt `dist\BQICH.exe` and `--self-test` exit 0.
+
+### Documentation
+- `SummaryCH.md`: full hand-off summary (author Chuma, assisted by DeepSeek 4.1).
+- Folder hint wording: `Installs to: ... (existing)/(new)`; mods-only
+  `Mods go into: ...`; tests updated.
