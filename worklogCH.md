@@ -161,7 +161,9 @@ Branch: `feat/settings` (from `main` @ f4d92f4; worklog brought over from `feat/
     `center_window(..., margin_x=24, margin_y=72)` keep it on-screen.
   - Settings sections live in `_scrollable()`; footer outside so it never clips.
   - new pure `paths_hint()`; hint moved below the mode frames so it works in both
-    modes and wraps on resize.
+    modes and wraps on resize. Wording is `Installs to:` (not "Creates") and each
+    folder is marked `(existing)` or `(new)`; mods-only shows `Mods go into:` with
+    the same markers.
   - Check for updates shows `updater.check_summary()` headline + Engines/Mods lines.
 - `updater.py`: `check_summary()` (missing counts as available, errors/platform
   never claim "up to date").

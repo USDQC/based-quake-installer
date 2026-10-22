@@ -14,9 +14,10 @@ Everything below was implemented and verified on `CH-updates`.
       without scrolling.
       - The four sections scroll inside the dialog; Save/Cancel stay pinned in the
         footer at any window/screen height.
-- [x] Verify the "Creates: ..." hint below the install-folder field:
+- [x] Verify the "Installs to: ..." hint below the install-folder field:
       - updates when custom unezQuake / FTE folders are set in Settings
       - shows only the remaining engine when one is unticked
+      - marks each folder `(existing)` or `(new)`
       - correct in mods-only mode ("Mods go into: ...")
       - handles long paths (wrapped), trailing spaces and quotes, `~`
       - refreshes immediately after Settings are saved

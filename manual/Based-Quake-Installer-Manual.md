@@ -114,9 +114,9 @@ The window is laid out from top to bottom in the order you'll use it: where to i
 
 ## 3.1 Install folder
 
-The text box at the top holds your **install root**. Type a full path, or click **Browse...** to pick a folder. The grey line underneath shows the two folders that will be created, for example:
+The text box at the top holds your **install root**. Type a full path, or click **Browse...** to pick a folder. The grey line underneath shows where each selected engine goes, and whether that folder already exists, for example:
 
-`Creates: C:\Games\unezQuake and C:\Games\FTE`
+`Installs to: C:\Games\unezQuake (new) and C:\Games\FTE (existing)`
 
 A full path is required: on Windows something like `C:\Games` or `D:\Games` (network paths starting with `\\` work too). On Linux an absolute path like `/home/you/Games` or `~/Games` is fine.
 

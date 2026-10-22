@@ -80,26 +80,30 @@ def center_window(win, parent=None, margin_x=0, margin_y=0):
 
 
 def paths_hint(existing, root, install_unez=True, install_fte=True,
-               unez_target="", fte_target="", unez_path="", fte_path=""):
+               unez_target="", fte_target="", unez_path="", fte_path="",
+               exists=os.path.isdir):
     """CH - Folder hint under the install-mode row; pure so it is unit tested."""
     def clean(p):
         p = str(p or "").strip().strip('"')
         return os.path.normpath(os.path.expanduser(p)) if p else ""
 
+    def mark(path):
+        return "%s (%s)" % (path, "existing" if exists(path) else "new")
+
     if existing:
         paths = [p for p in (clean(unez_path), clean(fte_path)) if p]
         if not paths:
             return "Choose the unezQuake and/or FTE folder you already have."
-        return "Mods go into: " + " and ".join(paths)
+        return "Mods go into: " + " and ".join(mark(p) for p in paths)
     root_dir = clean(root) or DEFAULT_ROOT
     paths = []
     if install_unez:
-        paths.append(clean(unez_target) or os.path.join(root_dir, UNEZ_DIRNAME))
+        paths.append(mark(clean(unez_target) or os.path.join(root_dir, UNEZ_DIRNAME)))
     if install_fte:
-        paths.append(clean(fte_target) or os.path.join(root_dir, FTE_DIRNAME))
+        paths.append(mark(clean(fte_target) or os.path.join(root_dir, FTE_DIRNAME)))
     if not paths:
         return "No engine selected - open Settings."
-    return "Creates:  " + "   and   ".join(paths)
+    return "Installs to: " + " and ".join(paths)
 
 
 def _enable_dpi_awareness():
