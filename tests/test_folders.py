@@ -42,14 +42,13 @@ class WindowsRulesTests(unittest.TestCase):
         ok(self.R, "D:\\ez", "E:\\fte", self.W)
         ok(self.R, None, "C:\\Games\\FTE", self.W)
 
-    def test_equal_is_allowed(self):
-        ok(self.R, "D:\\Q", "D:\\Q", self.W)
-        ok(self.R, "D:\\Quake\\Engine", "d:/QUAKE/engine/", self.W)
+    def test_equal_is_forbidden(self):
+        self.bad("D:\\Q", "D:\\Q", text="unezQuake and FTE need their own separate folders")
+        self.bad("D:\\Quake\\Engine", "d:/QUAKE/engine/", text="separate folders")
 
     def test_same_folder_helper(self):
         self.assertTrue(folders.same_folder("C:\\nQuake", "c:/nquake/", windows=True))
         self.assertFalse(folders.same_folder("C:\\nQuake", "C:\\fteqw", windows=True))
-        self.assertIn("will share", folders.same_folder_warning("C:\\nQuake"))
 
     def test_nested_both_ways(self):
         self.bad("D:\\Q", "D:\\Q\\fte", text="inside the unezQuake folder")
@@ -58,24 +57,27 @@ class WindowsRulesTests(unittest.TestCase):
     def test_prefix_is_not_nesting(self):
         ok(self.R, "D:\\Q", "D:\\Q2", self.W)
 
-    def test_install_root_and_siblings_are_allowed(self):
-        ok("C:\\nQuake", "C:\\nQuake", "C:\\fteqw", self.W)
-        ok("C:\\nQuake", "C:\\nQuake", None, self.W)
-        ok("C:\\nQuake", None, "C:\\fteqw", self.W)
+    def test_equals_root_is_forbidden(self):
+        self.bad("C:\\games", None, text="install folder itself")
+        self.bad(None, "C:\\Games\\", text="install folder itself")
+        self.bad("C:\\nQuake", "C:\\fteqw", root="C:\\nQuake", text="install folder itself")
 
     def test_ancestor_of_root(self):
         self.bad("C:\\", None, text="contain the install folder")
         self.bad(None, "c:\\", text="contain the install folder")
 
-    def test_off_engine_checks_only_when_installed(self):
-        ok(self.R, "C:\\Games\\FTE\\ez", None, self.W)
+    def test_inside_other_default(self):
+        self.bad("C:\\Games\\FTE\\ez", None, text="FTE folder")
+        self.bad("C:\\Games\\unezQuake", "C:\\GAMES\\UNEZQUAKE\\fte")
+        self.bad(None, "C:\\Games\\unezQuake")
+
+    def test_off_engine_checks_installed(self):
         self.bad("C:\\Games\\FTE\\ez", None, installed={"fte": "C:\\Games\\FTE"},
                  text="FTE folder")
-        self.bad(None, "C:\\Games", installed={"unez": "C:\\Games\\unezQuake"},
-                 text="contain the unezQuake folder")
+        self.bad(None, "C:\\Elsewhere", installed={"unez": "C:\\Elsewhere\\unezQuake"},
+                 text="unezQuake folder")
         self.bad("C:\\Games\\unezQuake", None,
                  installed={"fte": "C:\\Games\\unezQuake\\fte"}, text="FTE folder")
-
     def test_unc(self):
         ok("\\\\nas\\q", "\\\\nas\\q\\unezQuake", "//nas/q/FTE", self.W)
         self.bad("\\\\nas\\q\\a", "//NAS/q/a/b", root="\\\\nas\\q")
@@ -83,8 +85,7 @@ class WindowsRulesTests(unittest.TestCase):
     def test_existing_mode(self):
         folders.check_existing_folders("D:\\ez", "E:\\fte", windows=True)
         folders.check_existing_folders("D:\\ez", None, windows=True)
-        folders.check_existing_folders("D:\\Q", "d:\\q", windows=True)  # shared is fine
-        for u, f in (("D:\\Q", "D:\\Q\\fte"), ("D:\\Q\\e", "D:\\Q")):
+        for u, f in (("D:\\Q", "d:\\q"), ("D:\\Q", "D:\\Q\\fte"), ("D:\\Q\\e", "D:\\Q")):
             with self.assertRaises(folders.FolderError):
                 folders.check_existing_folders(u, f, windows=True)
 
@@ -107,19 +108,22 @@ class HostRulesTests(unittest.TestCase):
         except OSError:
             self.skipTest("symlinks not allowed")
         self.assertTrue(folders.same_folder(real, link))
+        with self.assertRaises(folders.FolderError):
+            folders.check_existing_folders(real, link)
 
-    def test_backend_allows_shared_folder(self):
+    def test_backend_rejects_shared_folder(self):
         same = os.path.join(self.tmp, "both")
         opts = installer.Options(self.tmp, "p", "soft", unez_target=same, fte_target=same)
-        opts.check_folders()
-        self.assertIn("will share", opts.folder_warning())
+        with self.assertRaises(installer.InstallError) as cm:
+            opts.check_folders()
+        self.assertIn("separate folders", str(cm.exception))
         self.assertFalse(os.path.exists(same))  # check only; nothing created
 
-    def test_backend_allows_root_as_target(self):
+    def test_backend_rejects_root_as_target(self):
         opts = installer.Options(self.tmp, "p", "soft", unez_target=self.tmp,
                                  install_fte=False)
-        opts.check_folders()
-        self.assertEqual(opts.folder_warning(), "")
+        with self.assertRaises(installer.InstallError):
+            opts.check_folders()
 
     def test_mods_only_rejects_nested(self):
         a = os.path.join(self.tmp, "a")
@@ -129,12 +133,13 @@ class HostRulesTests(unittest.TestCase):
         with self.assertRaises(installer.InstallError):
             installer.run_install(opts, installer.Reporter())
 
-    def test_mods_only_allows_shared(self):
+    def test_mods_only_rejects_shared(self):
         a = os.path.join(self.tmp, "a")
         opts = installer.Options(self.tmp, "p", "soft", existing=True, unez_path=a,
                                  fte_path=a)
-        opts.check_folders()
-        self.assertIn("will share", opts.folder_warning())
+        with self.assertRaises(installer.InstallError) as cm:
+            opts.check_folders()
+        self.assertIn("separate folders", str(cm.exception))
 
 
 class ManifestDirsTests(unittest.TestCase):
@@ -254,10 +259,15 @@ class TurnedOffNotesTests(unittest.TestCase):
         self.assertEqual(updater.turned_off_notes(self.tmp, self._opts(install_fte=False)), [])
 
     def test_shared_folder_does_not_fake_a_note(self):
+        # Legacy shared-folder installs: don't invent a turned-off note for the
+        # other engine just because the same folder is on disk.
         shared = os.path.join(self.tmp, "shared")
         os.makedirs(shared)
         man = manifest.record_engines(
-            manifest.empty(), self._opts(unez_target=shared, fte_target=shared))
+            manifest.empty(), self._opts(unez_target=shared, install_fte=False))
+        # Simulate an old manifest that recorded both engines in one folder.
+        man["engine_dirs"] = {"unez": os.path.abspath(shared),
+                              "fte": os.path.abspath(shared)}
         manifest.record(man, "client:unez", {"version": "1"})
         manifest.save(self.tmp, man)
         self.assertEqual(updater.turned_off_notes(

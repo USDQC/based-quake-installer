@@ -1,13 +1,15 @@
-"""Folder rules for the unezQuake and FTE client folders.
+"""Folder rules that keep the unezQuake and FTE trees apart.
 
-Everything that picks engine folders (Settings, Install, mods-only and the
-updater) goes through check_engine_folders() / check_existing_folders(). A
-shared folder is allowed (the GUI warns first); nesting is not.
+Everything that picks engine folders (Settings dialog, Install button, updater,
+CLI) goes through check_engine_folders() / check_existing_folders(), so the two
+clients can never end up sharing or nesting a folder.
 """
 
 import ntpath
 import os
 import posixpath
+
+from .constants import FTE_DIRNAME, UNEZ_DIRNAME
 
 HOST_WINDOWS = os.name == "nt"
 NAMES = {"unez": "unezQuake", "fte": "FTE"}
@@ -67,23 +69,24 @@ def same_folder(a, b, windows=HOST_WINDOWS):
     return bool(na and nb and na == nb)
 
 
-def same_folder_warning(path):
-    """Message shown before letting both engines share one folder."""
-    return ("unezQuake and FTE will share %s. Their configs and mod files "
-            "will mix; the unezQuake config is written last." % path)
+def _overlap(a, b, windows):
+    return a == b or is_inside(a, b, windows) or is_inside(b, a, windows)
 
 
 def check_existing_folders(unez, fte, windows=HOST_WINDOWS):
-    """Clients may share one folder (the caller warns); they must not nest."""
+    """Mods only: the user's own client folders must be different and not nested."""
     u, f = norm(unez, windows), norm(fte, windows)
     if not u or not f:
         return
+    if u == f:
+        raise FolderError("unezQuake and FTE need their own separate folders. "
+                          "Pick a different folder for one of them.")
     if is_inside(u, f, windows):
         raise FolderError("The unezQuake folder can't be inside the FTE folder. "
-                          "Pick two separate folders or one shared folder.")
+                          "Pick two separate folders.")
     if is_inside(f, u, windows):
         raise FolderError("The FTE folder can't be inside the unezQuake folder. "
-                          "Pick two separate folders or one shared folder.")
+                          "Pick two separate folders.")
 
 
 def check_engine_folders(root, unez, fte, windows=HOST_WINDOWS, installed=None):
@@ -95,26 +98,34 @@ def check_engine_folders(root, unez, fte, windows=HOST_WINDOWS, installed=None):
     Raises FolderError with a message meant for the user.
     """
     r = norm(root, windows)
+    mod = ntpath if windows else posixpath
     dirs = {"unez": norm(unez, windows), "fte": norm(fte, windows)}
+    defaults = {
+        "unez": norm(mod.join(clean(root), UNEZ_DIRNAME), windows) if r else "",
+        "fte": norm(mod.join(clean(root), FTE_DIRNAME), windows) if r else "",
+    }
     installed = installed or {}
     check_existing_folders(unez, fte, windows)
     for kind, d in dirs.items():
         if not d:
             continue
         name = NAMES[kind]
+        if r and d == r:
+            raise FolderError(
+                "The %s folder can't be the install folder itself. Leave it empty "
+                "to use %s, or pick a folder of its own." % (name, defaults[kind]))
         if r and is_inside(r, d, windows):
             raise FolderError(
                 "The %s folder can't contain the install folder. Pick a folder that "
                 "isn't above %s." % (name, r))
         other = "fte" if kind == "unez" else "unez"
-        if dirs[other]:
-            continue  # both active: check_existing_folders already rejected nesting
-        od = norm(installed.get(other), windows)
-        if od and is_inside(d, od, windows):
-            raise FolderError(
-                "The %s folder can't be inside the %s folder (%s). Pick a folder "
-                "of its own." % (name, NAMES[other], od))
-        if od and is_inside(od, d, windows):
-            raise FolderError(
-                "The %s folder can't contain the %s folder (%s). Pick a folder "
-                "of its own." % (name, NAMES[other], od))
+        # Don't collide with the other engine's default folder, or with a leftover
+        # install when that engine is turned off.
+        candidates = [defaults[other]]
+        if not dirs[other]:
+            candidates.append(norm(installed.get(other), windows))
+        for od in candidates:
+            if od and _overlap(d, od, windows):
+                raise FolderError(
+                    "The %s folder can't be in or around the %s folder (%s). Pick "
+                    "a folder of its own." % (name, NAMES[other], od))

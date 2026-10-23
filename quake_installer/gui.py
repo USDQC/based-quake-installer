@@ -535,7 +535,7 @@ class InstallerApp(object):
         self.ent_root.grid(row=0, column=0, sticky="ew", padx=(0, 6))
         self.btn_browse = ttk.Button(self.frm_full, text="Browse...", command=self._browse)
         self.btn_browse.grid(row=0, column=1)
-        # mods only: the user's own client folders (blank = skip that client)
+        # mods only: the user's own client folders (leave one empty if you don't have it)
         self.frm_exist = ttk.Frame(f)
         self.frm_exist.grid(row=1, column=0, columnspan=2, sticky="ew")
         self.frm_exist.columnconfigure(1, weight=1)
@@ -1610,10 +1610,6 @@ class InstallerApp(object):
             opts = self._collect(configs_only)
         except ValueError as exc:
             messagebox.showerror(APP_TITLE, str(exc))
-            return
-        shared = opts.folder_warning()
-        if shared and not messagebox.askyesno(
-                APP_TITLE, shared + "\n\nContinue anyway?", icon="warning"):
             return
         if not opts.binds and not any(self._collect_mod_binds().values()):
             if not messagebox.askyesno(

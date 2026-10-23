@@ -328,9 +328,6 @@ def apply_updates(opts, items, rep, cancel_event=None):
     else:
         opts.use_manifest_dirs(override=True)
     opts.check_folders()
-    shared = opts.folder_warning()
-    if shared:
-        rep.log("  WARN: " + shared)
     if not opts.install_unez:
         items = [i for i in items if i.component != "client:unez"]
     if not opts.install_fte:

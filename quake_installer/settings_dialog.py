@@ -75,9 +75,9 @@ class SettingsDialog(object):
             ent.bind("<KeyRelease>", lambda _e: self._hints())
         ttk.Label(eng, style="Muted.TLabel", wraplength=WRAP, justify="left",
                   text="Leave a folder empty to use the standard folder inside the "
-                       "install folder. An engine can use the install folder itself or "
-                       "another folder; sharing one folder is allowed but may mix "
-                       "configs. An existing folder is reused and your cfgs are never "
+                       "install folder. unezQuake and FTE need their own separate "
+                       "folders — not the install folder itself, and not nested inside "
+                       "each other. An existing folder is reused and your cfgs are never "
                        "overwritten. Engines you untick are not downloaded, updated, or "
                        "given mods."
                   ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
@@ -177,10 +177,6 @@ class SettingsDialog(object):
                 installed=manifest.engine_folders(manifest.load(root), root))
         except folders.FolderError as exc:
             self._error(str(exc))
-            return None
-        if folders.same_folder(eu, ef) and not messagebox.askyesno(
-                APP_TITLE, folders.same_folder_warning(eu) + "\n\nContinue anyway?",
-                icon="warning", parent=self.win):
             return None
         for label, p, kind in (("unezQuake", u, "unez"), ("FTE", f, "fte")):
             if not p or not os.path.isdir(p):

@@ -104,7 +104,7 @@ class Options(object):
         return manifest.engine_folders(manifest.load(self.root), self.root)
 
     def check_folders(self):
-        """Raise InstallError when the engine folders would nest."""
+        """Raise InstallError when the engine folders would share, nest, or equal the root."""
         try:
             if self.existing:
                 folders.check_existing_folders(self.unez_path, self.fte_path)
@@ -114,16 +114,6 @@ class Options(object):
                     installed=self.installed_engine_dirs())
         except folders.FolderError as exc:
             raise InstallError(str(exc))
-
-    def folder_warning(self):
-        """Warning when both engines share one folder; "" otherwise."""
-        if self.existing:
-            a, b = self.unez_path, self.fte_path
-        else:
-            a, b = self.unez_dir, self.fte_dir
-        if folders.same_folder(a, b):
-            return folders.same_folder_warning(a)
-        return ""
 
     def use_manifest_dirs(self, override=False):
         """Take the engine folders recorded in {root}'s manifest.
@@ -355,9 +345,6 @@ def run_install(opts, rep=None, cancel_event=None):
         raise InstallError("Choose at least one engine to install (Settings).")
     opts.use_manifest_dirs()
     opts.check_folders()
-    shared = opts.folder_warning()
-    if shared:
-        rep.log("  WARN: " + shared)
 
     dirs = [root]
     for d in (opts.unez_dir, opts.fte_dir):
@@ -664,9 +651,6 @@ def run_existing(opts, rep, cancel_event=None):
     if not opts.unez_dir and not opts.fte_dir:
         raise InstallError("Choose an existing unezQuake folder and/or an FTE folder.")
     opts.check_folders()
-    shared = opts.folder_warning()
-    if shared:
-        rep.log("  WARN: " + shared)
     for label, d, check in (("unezQuake", opts.unez_dir, existing.check_unez_folder),
                             ("FTE", opts.fte_dir, existing.check_fte_folder)):
         if not d:
