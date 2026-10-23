@@ -280,3 +280,17 @@ cherry-pick from any other branch.
 - Rebuilt BQICH cleanly (11,370,934 bytes, 08:42); frozen self-test version
   1.7.0, exit 0. Removed the temporary `dist\BQICH-old.exe` after closing the
   old instance.
+
+## 2026-10-23 09:12 - CLI correctness
+
+See `CLIupdateCH.md` for the full write-up.
+
+- `installer_cli.py`: `--check-updates` now passes `opts` to
+  `updater.check_updates()` so it follows manifest-recorded folders;
+  `--update` catches `InstallError` and exits 1 cleanly; `--root` must be a
+  full path; help text updated.
+- `tests/test_cli.py`: opts forwarding, update error handling, relative-root
+  rejection.
+- Manual chapter 9 notes the full-path rule and manifest folder behavior.
+- pytest 232 passed, 7 skipped; CLI `--self-test` and `--version` ok.
+- No BQICH rebuild needed (GUI build unaffected).

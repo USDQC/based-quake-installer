@@ -609,7 +609,7 @@ For scripting or headless use, `installer_cli.py` (or `BasedQuakeInstaller-cli.e
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--root PATH` | install folder | `C:\Games` or `~/Games` |
+| `--root PATH` | install folder (must be a full path) | `C:\Games` or `~/Games` |
 | `--name NAME` | player name | `player` |
 | `--preset` none, vanilla, wasd, modern | fill binds: `vanilla` = stock Quake keys; `wasd` = stock + WASD movement and MOUSE1 attack; `modern` = `wasd` **plus** weapons on 1 q e c v x r f (it includes WASD); `none` = no binds | `vanilla` |
 | `--movement` vanilla, wasd | older way to choose a preset (combine with `--weapons`) | – |
@@ -638,6 +638,8 @@ Notes:
 
 - The default `--preset vanilla` writes the stock Quake keys. Use `--preset none` for a config with no binds of your own.
 - The CLI always installs the client builds for the system it runs on.
+- `--root` must be a full path (`C:\Games`, `\\nas\games`, or `~/Games`); relative paths are rejected.
+- `--check-updates` and `--update` follow the engine folders recorded in `based-quake-manifest.json`, including custom folders chosen in Settings.
 - The command line has no option for Mod binds. Use the window for those.
 - `--update` returns exit code 1 if any component failed to update.
 
