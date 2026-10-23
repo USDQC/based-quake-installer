@@ -7,7 +7,7 @@ Example:
 import argparse
 import sys
 
-from quake_installer import __version__, cfg
+from quake_installer import __version__, cfg, folders
 from quake_installer.constants import DEFAULT_ROOT, host_platform
 from quake_installer.installer import InstallError, Options, run_install
 from quake_installer.mods import load_specs
@@ -19,7 +19,8 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version="Based Quake Installer %s" % __version__)
     ap.add_argument("--self-test", action="store_true",
                     help="check that the program and its bundled tools start, then exit")
-    ap.add_argument("--root", default=DEFAULT_ROOT)
+    ap.add_argument("--root", default=DEFAULT_ROOT,
+                    help="install folder (must be a full path; default: %(default)s)")
     ap.add_argument("--name", default="player")
     ap.add_argument("--preset", choices=("none", "vanilla", "wasd", "modern"), default="vanilla",
                     help="bind defaults (default: vanilla = stock default.cfg). wasd = vanilla + "
@@ -46,6 +47,9 @@ def main(argv=None):
     if a.self_test:
         from quake_installer import selftest
         return selftest.run(gui=False)
+    root = folders.clean(a.root)
+    if not folders.is_full_path(root):
+        ap.error("--root must be a full path, e.g. C:\\Games")
     keys = [m["key"] for m in load_specs()]
     if a.mods.strip().lower() in ("", "all"):
         mods = keys
@@ -72,21 +76,25 @@ def main(argv=None):
     else:
         binds = {}
 
-    opts = Options(a.root, a.name, a.look, binds=binds,
+    opts = Options(root, a.name, a.look, binds=binds,
                    write_bats=False, configs_only=a.configs_only,
                    mods=mods, mod_files=mod_files, mods_only=a.mods_only,
                    platform=host_platform())
     if a.check_updates or a.update:
         from quake_installer import updater
         from quake_installer.installer import Reporter
-        note = updater.platform_mismatch_note(a.root, opts.platform)
+        note = updater.platform_mismatch_note(root, opts.platform)
         if note:
             print("NOTE: " + note)
-        items = updater.check_updates(a.root, opts.platform)
+        items = updater.check_updates(root, opts.platform, opts=opts)
         for it in items:
             print("  " + it.line())
         if a.update:
-            up, failed = updater.apply_updates(opts, items, Reporter())
+            try:
+                up, failed = updater.apply_updates(opts, items, Reporter())
+            except InstallError as exc:
+                print("ERROR: %s" % exc, file=sys.stderr)
+                return 1
             print("updated: %d, failed: %d" % (len(up), len(failed)))
             return 1 if failed else 0
         return 0

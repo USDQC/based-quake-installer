@@ -356,6 +356,23 @@ class FteHomeDetectTests(unittest.TestCase):
     def test_no_fmf_no_home_is_install(self):
         self.assertEqual(self.det().mode, existing.MODE_INSTALL)
 
+    def test_describe_wording(self):
+        # No cfg is needed: the folder layout alone decides.
+        self.fmf("game afterquake\nhomedirmode auto\n")
+        self.assertEqual(self.det().describe(),
+                         "FTE configs: %s  (install folder; no FTE home folder found)"
+                         % self.fte)
+        home = os.path.join(self.home, ".local", "share", "afterquake")
+        os.makedirs(home)
+        self.assertEqual(self.det().describe(),
+                         "FTE configs: %s  (home folder; found automatically)" % home)
+        self.fmf("game afterquake\ndisablehomedir 1\n")
+        self.assertIn("(install folder; disabled by default.fmf)",
+                      self.det().describe())
+        os.remove(os.path.join(self.fte, "default.fmf"))
+        os.makedirs(os.path.join(self.home, ".local", "share", "quake"))
+        self.assertIn("needs a choice", self.det().describe())
+
     def test_windows_candidates(self):
         env = {"LOCALAPPDATA": os.path.join(self.t, "lad"),
                "USERPROFILE": os.path.join(self.t, "prof")}

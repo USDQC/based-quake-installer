@@ -3,8 +3,9 @@ import shutil
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
-from quake_installer import clients, manifest, updater
+from quake_installer import clients, installer, manifest, updater
 from quake_installer.download import DownloadError
 
 
@@ -152,6 +153,221 @@ class ClientInstallTests(unittest.TestCase):
         self.assertEqual(open(os.path.join(dst, "fteqw64.exe")).read(), "new-exe")
         self.assertEqual(open(os.path.join(dst, "fte", "config.cfg")).read(), "mine")
         self.assertEqual(open(os.path.join(dst, "default.fmf")).read(), "game stock")
+
+
+class SelectionTests(unittest.TestCase):
+    # CH - The dialog only lets users check rows apply_updates() can install, and the
+    # default never picks "not installed" mods on its own.
+    def _items(self):
+        return [
+            updater.UpdateItem("client:unez", "unezQuake", manifest.STATUS_OUTDATED),
+            updater.UpdateItem("client:fte", "FTE", manifest.STATUS_OK),
+            updater.UpdateItem("mod:a", "A", manifest.STATUS_OUTDATED),
+            updater.UpdateItem("mod:b", "B", manifest.STATUS_MISSING),
+            updater.UpdateItem("mod:c", "C", manifest.STATUS_ERROR),
+            updater.UpdateItem("mod:d", "D", manifest.STATUS_UNAVAILABLE),
+            updater.UpdateItem("client:old", "Old", manifest.STATUS_PLATFORM),
+        ]
+
+    def test_selectable_only_installable(self):
+        got = {i.component for i in self._items() if updater.is_selectable(i)}
+        self.assertEqual(got, {"client:unez", "mod:a", "mod:b"})
+
+    def test_default_skips_missing(self):
+        self.assertEqual(updater.select_components(self._items()),
+                         {"client:unez", "mod:a"})
+
+    def test_all_includes_missing_but_not_errors(self):
+        self.assertEqual(updater.select_components(self._items(), updater.SELECT_MODE_ALL),
+                         {"client:unez", "mod:a", "mod:b"})
+
+    def test_engines_and_mods_presets(self):
+        items = self._items()
+        self.assertEqual(updater.select_components(items, updater.SELECT_MODE_ENGINES),
+                         {"client:unez"})
+        self.assertEqual(updater.select_components(items, updater.SELECT_MODE_MODS),
+                         {"mod:a", "mod:b"})
+
+    def test_none_and_unknown_mode(self):
+        self.assertEqual(updater.select_components(self._items(), updater.SELECT_MODE_NONE),
+                         set())
+        with self.assertRaises(ValueError):
+            updater.select_components(self._items(), "nope")
+
+
+class _Rep(object):
+    def __init__(self):
+        self.lines = []
+
+    def log(self, msg):
+        self.lines.append(msg)
+
+    def step(self, *args):
+        pass
+
+    def progress(self, *args):
+        pass
+
+
+class ApplySubsetTests(unittest.TestCase):
+    # CH - Selecting a subset must leave every unchecked component untouched.
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_only_selected_mods_are_installed(self):
+        fte = os.path.join(self.tmp, "FTE")
+        os.makedirs(fte)
+        man = manifest.empty("windows")
+        manifest.record(man, "mod:a", {"file": "a.zip", "version": "1",
+                                       "sha256": "aa" * 32, "size": 10})
+        manifest.record(man, "mod:b", {"file": "b.zip", "version": "1",
+                                       "sha256": "bb" * 32, "size": 10})
+        manifest.save(self.tmp, man)
+        spec_a = {"key": "a", "title": "A", "gamedir": "a", "clients": ["fte"],
+                  "version": "2", "sha256": "cc" * 32, "file": "a.zip", "url": "u"}
+        item_a = updater.UpdateItem("mod:a", "A", manifest.STATUS_OUTDATED)
+        item_a.spec = spec_a
+        calls = []
+
+        def fake_install(spec, fte_dir, work_dir, meta_out=None, **kwargs):
+            calls.append(spec["key"])
+            os.makedirs(os.path.join(fte_dir, spec["gamedir"]), exist_ok=True)
+            meta_out.update({"file": spec["file"], "version": spec["version"],
+                             "sha256": spec["sha256"], "size": 1})
+            return "fake"
+
+        opts = installer.Options(self.tmp, "p", "soft", platform="windows")
+        with mock.patch.object(updater.modlib, "install_mod", fake_install):
+            up, failed = updater.apply_updates(opts, [item_a], _Rep())
+        self.assertEqual(calls, ["a"])
+        self.assertEqual(failed, [])
+        self.assertEqual([i.component for i in up], ["mod:a"])
+        saved = manifest.load(self.tmp)["components"]
+        self.assertEqual(saved["mod:a"]["version"], "2")
+        self.assertEqual(saved["mod:b"]["version"], "1")
+
+    def test_apply_skips_items_that_need_no_update(self):
+        # An unchecked-but-outdated item never reaches apply_updates; an item passed
+        # with status "up to date" must be a no-op.
+        opts = installer.Options(self.tmp, "p", "soft", platform="windows")
+        item = updater.UpdateItem("mod:a", "A", manifest.STATUS_OK)
+        with mock.patch.object(updater.modlib, "install_mod",
+                               side_effect=AssertionError("must not install")):
+            up, failed = updater.apply_updates(opts, [item], _Rep())
+        self.assertEqual((up, failed), ([], []))
+
+
+class EngineFilterTests(unittest.TestCase):
+    # CH - Check for updates follows the Settings engine choice: skipped engines get
+    # no rows and their mods are not offered/updated.
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _opts(self, **kwargs):
+        return installer.Options(self.tmp, "p", "soft", platform="windows", **kwargs)
+
+    def _check(self, opts, specs):
+        return updater.check_updates(
+            self.tmp, "windows", specs=specs, log=lambda *a: None, opts=opts,
+            resolve_unez=lambda p: {"version": "2.1", "url": "u"},
+            resolve_fte=lambda p: {"version": "1.0", "url": "f"})
+
+    def test_unselected_engine_has_no_row(self):
+        items = self._check(self._opts(install_fte=False), [])
+        self.assertEqual([i.component for i in items], ["client:unez"])
+
+    def test_mods_for_unselected_engine_are_skipped(self):
+        specs = [
+            {"key": "fvf", "title": "FvF", "gamedir": "fvf", "clients": ["fte"],
+             "version": "1", "url": "https://drive.google.com/file/d/x/view",
+             "sha256": "aa" * 32},
+            {"key": "painkeep", "title": "PainKeep", "gamedir": "painkeep",
+             "clients": ["fte", "unez"], "version": "1",
+             "url": "https://drive.google.com/file/d/p/view", "sha256": "bb" * 32},
+        ]
+        items = self._check(self._opts(install_fte=False), specs)
+        comps = [i.component for i in items]
+        self.assertNotIn("mod:fvf", comps)
+        self.assertIn("mod:painkeep", comps)
+
+    def test_mod_presence_uses_custom_target_not_the_root(self):
+        opts = self._opts(install_unez=True, install_fte=False,
+                          unez_target=os.path.join(self.tmp, "ezquake"))
+        spec = {"key": "painkeep", "gamedir": "painkeep", "clients": ["unez"]}
+        os.makedirs(os.path.join(self.tmp, "ezquake", "painkeep"))
+        open(os.path.join(self.tmp, "ezquake", "painkeep", "progs.dat"), "w").close()
+        os.makedirs(os.path.join(self.tmp, "unezQuake", "painkeep"))
+        open(os.path.join(self.tmp, "unezQuake", "painkeep", "progs.dat"), "w").close()
+        self.assertTrue(updater._mod_present(self.tmp, spec, opts))
+        # The default root tree is ignored when a custom target is configured.
+        opts.unez_target = os.path.join(self.tmp, "elsewhere")
+        self.assertFalse(updater._mod_present(self.tmp, spec, opts))
+
+    def test_apply_updates_drops_unselected_engine(self):
+        item = updater.UpdateItem("client:fte", "FTE", manifest.STATUS_OUTDATED)
+        with mock.patch.object(updater.download, "download",
+                               side_effect=AssertionError("must not download")):
+            up, failed = updater.apply_updates(self._opts(install_fte=False), [item], _Rep())
+        self.assertEqual((up, failed), ([], []))
+
+
+class SummaryTests(unittest.TestCase):
+    # CH - The dialog headline/group lines must never claim "up to date" when a
+    # check failed, and missing mods stay separate from updates.
+    def _item(self, component, status, title="T"):
+        return updater.UpdateItem(component, title, status)
+
+    def test_empty(self):
+        self.assertEqual(updater.check_summary([]), ("Nothing to check.", []))
+
+    def test_all_up_to_date(self):
+        items = [self._item("client:unez", manifest.STATUS_OK),
+                 self._item("client:fte", manifest.STATUS_OK),
+                 self._item("mod:a", manifest.STATUS_OK),
+                 self._item("mod:b", manifest.STATUS_OK)]
+        headline, lines = updater.check_summary(items)
+        self.assertEqual(headline, "Everything is up to date.")
+        self.assertEqual(lines, ["Engines: unezQuake and FTE are up to date.",
+                                 "Mods: all up to date (2)."])
+
+    def test_mixed_updates_and_missing(self):
+        items = [self._item("client:unez", manifest.STATUS_OUTDATED),
+                 self._item("client:fte", manifest.STATUS_OK),
+                 self._item("mod:a", manifest.STATUS_OUTDATED),
+                 self._item("mod:b", manifest.STATUS_MISSING)]
+        headline, lines = updater.check_summary(items)
+        self.assertEqual(headline, "Updates available.")
+        self.assertEqual(lines, ["Engines: unezQuake update available; FTE up to date.",
+                                 "Mods: 1 update available, 1 not installed."])
+
+    def test_issues_only_never_says_up_to_date(self):
+        items = [self._item("client:fte", manifest.STATUS_ERROR),
+                 self._item("mod:a", manifest.STATUS_UNAVAILABLE),
+                 self._item("mod:b", manifest.STATUS_PLATFORM)]
+        headline, lines = updater.check_summary(items)
+        self.assertEqual(headline,
+                         "No updates available, but some checks need attention.")
+        self.assertIn("Engines: FTE check failed.", lines)
+        self.assertIn("Mods: 1 without a build for this platform, "
+                      "1 for another platform.", lines)
+
+    def test_mods_only_has_no_engine_line(self):
+        headline, lines = updater.check_summary(
+            [self._item("mod:a", manifest.STATUS_OUTDATED)])
+        self.assertEqual(headline, "Updates available.")
+        self.assertEqual(lines, ["Mods: 1 update available."])
+
+    def test_one_engine_uses_is(self):
+        headline, lines = updater.check_summary(
+            [self._item("client:fte", manifest.STATUS_OK)])
+        self.assertEqual(headline, "Everything is up to date.")
+        self.assertEqual(lines, ["Engines: FTE is up to date."])
 
 
 if __name__ == "__main__":

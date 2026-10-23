@@ -8,6 +8,8 @@ import json
 import os
 import time
 
+from .constants import FTE_DIRNAME, UNEZ_DIRNAME
+
 MANIFEST_NAME = "based-quake-manifest.json"
 SCHEMA = 1
 
@@ -133,3 +135,43 @@ def compare(installed, remote, platform=None):
                 return STATUS_OUTDATED
         return STATUS_OK
     return STATUS_OK if _same_file(installed, remote) else STATUS_OUTDATED
+
+
+ENGINE_KEYS = ("unez", "fte")
+
+
+def record_engines(data, opts):
+    """Remember which engines a full install uses and the folders they live in.
+
+    An engine that is turned off keeps the folder recorded by an earlier install,
+    so the updater can still tell that it is there."""
+    dirs = data.get("engine_dirs") if isinstance(data.get("engine_dirs"), dict) else {}
+    dirs = dict(dirs)
+    selected = {}
+    for key, on, path in (("unez", opts.install_unez, opts.unez_dir),
+                          ("fte", opts.install_fte, opts.fte_dir)):
+        selected[key] = bool(on)
+        if on and path:
+            dirs[key] = os.path.abspath(path)
+    data["engine_dirs"] = dirs
+    data["engines_selected"] = selected
+    return data
+
+
+def engine_dirs(data):
+    """{"unez": path, "fte": path} recorded by record_engines(); {} for old manifests."""
+    dirs = data.get("engine_dirs") if isinstance(data, dict) else None
+    if not isinstance(dirs, dict):
+        return {}
+    return {k: dirs[k] for k in ENGINE_KEYS if isinstance(dirs.get(k), str) and dirs[k]}
+
+
+def engine_folders(data, root):
+    """Recorded engine folders, falling back to the default under root when an
+    old manifest only lists the engine component."""
+    dirs = engine_dirs(data)
+    comps = data.get("components", {}) if isinstance(data, dict) else {}
+    for key, dirname in (("unez", UNEZ_DIRNAME), ("fte", FTE_DIRNAME)):
+        if not dirs.get(key) and ("client:" + key) in comps:
+            dirs[key] = os.path.join(root, dirname)
+    return dirs

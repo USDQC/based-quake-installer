@@ -114,9 +114,9 @@ The window is laid out from top to bottom in the order you'll use it: where to i
 
 ## 3.1 Install folder
 
-The text box at the top holds your **install root**. Type a full path, or click **Browse...** to pick a folder. The grey line underneath shows the two folders that will be created, for example:
+The text box at the top holds your **install root**. Type a full path, or click **Browse...** to pick a folder. The grey line underneath shows where each selected engine goes, and whether that folder already exists, for example:
 
-`Creates: C:\Games\unezQuake and C:\Games\FTE`
+`Installs to: C:\Games\unezQuake (new) and C:\Games\FTE (existing)`
 
 A full path is required: on Windows something like `C:\Games` or `D:\Games` (network paths starting with `\\` work too). On Linux an absolute path like `/home/you/Games` or `~/Games` is fine.
 
@@ -171,7 +171,7 @@ The **Binds** box has two tabs. **Custom binds** holds your everyday keys for bo
 - **Clear** empties every box, on **both** the Custom binds tab and the Mod binds tab.
 - If you put the same key on two actions, the one lower in the list wins.
 
-<div class="note"><b>Your settings are remembered.</b> The first time you open the installer, the boxes are filled with the <b>Default</b> preset. After each Install or Update configs only, your name, look, install folder, Custom binds and Mod binds are saved and loaded again next time (Windows: <code>%APPDATA%\BasedQuakeInstaller\settings.json</code>; Linux: <code>~/.config/based-quake-installer/settings.json</code>). If you click Install with <b>every</b> box empty, the installer asks before writing a config with no binds.</div>
+<div class="note"><b>Your settings are remembered.</b> The first time you open the installer, the boxes are filled with the <b>Default</b> preset. After each Install or Update configs only, your name, look, install folder, Custom binds and Mod binds are saved and loaded again next time (Windows: <code>%APPDATA%\BasedQuakeInstaller\settings.json</code>; Linux: <code>~/.config/based-quake-installer/settings.json</code>). The <b>Settings</b> window has a <b>Remember install directory and client folders</b> option, on by default; turn it off if you prefer to start from the default folder each time (name, binds and look are still remembered). If you click Install with <b>every</b> box empty, the installer asks before writing a config with no binds.</div>
 
 A few handy keys are always added for you, unless you've used that key for something else: **Pause** = pause, **Esc** = menu, **~** and **\`** = console, **+**/**=** = bigger screen, **-** = smaller screen, **F12** = screenshot, **\\** = mouse look.
 
@@ -218,10 +218,11 @@ The panel on the right just shows the mods that will be installed. There are no 
 
 | Button | What it does |
 |---|---|
-| **Install** | The full job: downloads both clients, the shareware data and all mods, then writes all config files and FTE's `default.fmf`. It's safe to run again on an existing install. |
+| **Install** | The full job: downloads the selected engines, the shareware data and all mods, then writes all config files and FTE's `default.fmf`. It's safe to run again on an existing install. |
 | **Update configs only** | Downloads nothing. It rewrites `id1/based.cfg` and the `autoexec.cfg` files (name, look, binds), every mod folder's `autoexec.cfg` and `binds.cfg`, and checks `default.fmf`. Use it after changing your keys or name. You need a finished install first. |
 | **Check for updates** | Looks online for newer client builds or changed mods (via `mods.json` on Google Drive) and shows a list. From that list, **Update** downloads only what changed. See Chapter 7. |
 | **Update installer** | Checks for a newer version of this installer program and offers to update it. Games, mods and configs aren't touched. See 7.1. |
+| **Settings (cog)** | Pick which engines a full install uses and where each goes, whether folders are remembered, the theme, and the installer self-check. See 3.6.1. |
 | **Cancel** | Stops a running install or update. It's only active while something is running. |
 | **Open game folder** | Opens your install folder in Explorer or your file manager. It sits on the left, next to **Cancel**. |
 
@@ -231,9 +232,19 @@ While a job is running, the other controls are greyed out. If you close the wind
 
 Already have unezQuake and/or FTE installed? Choose **Mods-only mode** and pick the folder for each client you have. The installer adds the mods, the binds and the gamedir-switch files, without touching your existing configs. If it can't tell where FTE keeps its home folder, it asks you.
 
-### Theme picker
+### 3.6.1 Settings
 
-Choose between the **Classic** and **Dark** themes for the installer window.
+Click the **cog** in the top-right corner (or press **Ctrl+,**).
+
+**Engines (full install).** Tick **unezQuake**, **FTE**, or both. Only ticked engines are downloaded, updated, given `pak0.pak`, configs and mods. Leave a folder box blank to use the normal location under the install folder (`unezQuake` and `FTE`), or pick a folder to reuse an existing install, for example unezQuake inside your ezquake folder and FTE somewhere else. An existing folder is reused; your cfg files are never overwritten. Mods-only mode ignores this section and uses the folders you type on the main window.
+
+**Folders.** *Remember install directory and client folders* is on by default. Turn it off to start from the default folder each time; your name, look and binds are still remembered.
+
+**Appearance.** Choose between the **Classic** and **Dark** themes for the installer window.
+
+**Installer updates.** *Check for a new installer when it starts* only shows a small "Installer X is available" notice; nothing is downloaded or replaced until you click **Update installer** and choose **Update now**.
+
+Settings are saved when you click **Save**, and apply to the next Install / Check for updates.
 
 ## 3.7 Progress and log
 
@@ -245,10 +256,10 @@ At the bottom you'll find:
 
 A full install runs these seven steps:
 
-1. Download unezQuake for this system
-2. Download FTE for this system
+1. Download unezQuake for this system (skipped if not ticked in Settings)
+2. Download FTE for this system (skipped if not ticked in Settings)
 3. Get the Quake shareware `pak0.pak`. It's checked against its known size and MD5 fingerprint. If a good copy is already installed, the download is skipped.
-4. Copy `pak0.pak` into both `id1` folders
+4. Copy `pak0.pak` into the `id1` folder of each selected client
 5. Install all the mods (download each zip from Google Drive, check its sha256, unzip it into each client)
 6. Write the configs: `id1/based.cfg` and `autoexec.cfg` for each client, then each mod folder's `autoexec.cfg` and `binds.cfg` (after the mods, so a mod's own autoexec is kept)
 7. Configure FTE (`default.fmf` with disablehomedir) and save the install manifest
@@ -510,7 +521,7 @@ A source only counts when it is ticked, so the installer also adds `sb_sourcemar
 
 ![The "Check for updates" result window.](img/update-check.png)
 
-Click **Check for updates** on an existing install. The installer reads its record of what it installed (`based-quake-manifest.json` in your install folder) and compares it with what's online:
+Click **Check for updates** on an existing install. The installer reads its record of what it installed (`based-quake-manifest.json` in your install folder) and compares it with what's online. The window starts with a summary (for example **Engines: unezQuake and FTE are up to date.** and **Mods: 2 updates available.**); if a check failed it says so instead of claiming everything is up to date.
 
 | Component | How it's checked |
 |---|---|
@@ -598,7 +609,7 @@ For scripting or headless use, `installer_cli.py` (or `BasedQuakeInstaller-cli.e
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--root PATH` | install folder | `C:\Games` or `~/Games` |
+| `--root PATH` | install folder (must be a full path) | `C:\Games` or `~/Games` |
 | `--name NAME` | player name | `player` |
 | `--preset` none, vanilla, wasd, modern | fill binds: `vanilla` = stock Quake keys; `wasd` = stock + WASD movement and MOUSE1 attack; `modern` = `wasd` **plus** weapons on 1 q e c v x r f (it includes WASD); `none` = no binds | `vanilla` |
 | `--movement` vanilla, wasd | older way to choose a preset (combine with `--weapons`) | – |
@@ -627,6 +638,8 @@ Notes:
 
 - The default `--preset vanilla` writes the stock Quake keys. Use `--preset none` for a config with no binds of your own.
 - The CLI always installs the client builds for the system it runs on.
+- `--root` must be a full path (`C:\Games`, `\\nas\games`, or `~/Games`); relative paths are rejected.
+- `--check-updates` and `--update` follow the engine folders recorded in `based-quake-manifest.json`, including custom folders chosen in Settings.
 - The command line has no option for Mod binds. Use the window for those.
 - `--update` returns exit code 1 if any component failed to update.
 
