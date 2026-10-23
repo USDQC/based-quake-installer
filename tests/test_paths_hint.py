@@ -49,7 +49,7 @@ class PathsHintTests(unittest.TestCase):
 
     def test_no_engine_selected(self):
         self.assertEqual(paths_hint(False, "C:/Games", False, False, exists=self._new),
-                         "No engine selected - open Settings.")
+                         "No engine is turned on. Open Settings to choose one.")
 
     def test_mods_only_folders_with_markers(self):
         self.assertEqual(

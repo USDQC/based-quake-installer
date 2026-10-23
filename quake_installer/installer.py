@@ -10,7 +10,8 @@ import os
 import shutil
 import tempfile
 
-from . import cfg, clients, download, extract, launchers, manifest, mods as modlib, sb_sources
+from . import (cfg, clients, download, extract, folders, launchers, manifest,
+               mods as modlib, sb_sources)
 from .constants import (
     FTE_DIRNAME, FTE_EXE_BY_PLATFORM, PAK0_MD5, PAK0_SIZE, PROTECTED_FILES, SHAREWARE_URLS,
     UNEZ_DIRNAME, UNEZ_EXE_BY_PLATFORM, host_platform,
@@ -95,6 +96,48 @@ class Options(object):
         if self.existing and self.fte_path:
             return self.fte_cfg_dir or self.fte_path
         return self.fte_dir
+
+    def installed_engine_dirs(self):
+        """Folders a turned-off engine still lives in, for folder checks."""
+        if self.existing or not self.root:
+            return {}
+        return manifest.engine_folders(manifest.load(self.root), self.root)
+
+    def check_folders(self):
+        """Raise InstallError when the engine folders would nest."""
+        try:
+            if self.existing:
+                folders.check_existing_folders(self.unez_path, self.fte_path)
+            else:
+                folders.check_engine_folders(
+                    self.root, self.unez_dir, self.fte_dir,
+                    installed=self.installed_engine_dirs())
+        except folders.FolderError as exc:
+            raise InstallError(str(exc))
+
+    def folder_warning(self):
+        """Warning when both engines share one folder; "" otherwise."""
+        if self.existing:
+            a, b = self.unez_path, self.fte_path
+        else:
+            a, b = self.unez_dir, self.fte_dir
+        if folders.same_folder(a, b):
+            return folders.same_folder_warning(a)
+        return ""
+
+    def use_manifest_dirs(self, override=False):
+        """Take the engine folders recorded in {root}'s manifest.
+
+        override=False: only where no folder was chosen (Install). override=True:
+        always (updates follow what is really installed). Old manifests without
+        the "engine_dirs" key change nothing."""
+        if self.existing or not self.root:
+            return
+        recorded = manifest.engine_dirs(manifest.load(self.root))
+        if recorded.get("unez") and (override or not self.unez_target):
+            self.unez_target = recorded["unez"]
+        if recorded.get("fte") and (override or not self.fte_target):
+            self.fte_target = recorded["fte"]
 
     def cfg_dir_for(self, label, data_dir):
         """Map a client gamedir (data) path to the folder its cfgs go into."""
@@ -310,6 +353,11 @@ def run_install(opts, rep=None, cancel_event=None):
     opts.root = root
     if not opts.uses_unez and not opts.uses_fte:
         raise InstallError("Choose at least one engine to install (Settings).")
+    opts.use_manifest_dirs()
+    opts.check_folders()
+    shared = opts.folder_warning()
+    if shared:
+        rep.log("  WARN: " + shared)
 
     dirs = [root]
     for d in (opts.unez_dir, opts.fte_dir):
@@ -320,8 +368,8 @@ def run_install(opts, rep=None, cancel_event=None):
         _mkdirs(d)
     _check_writable(root)
     rep.log("Install root : %s" % root)
-    rep.log("UnezQuake    : %s" % (opts.unez_dir or "(not selected)"))
-    rep.log("FTE          : %s" % (opts.fte_dir or "(not selected)"))
+    rep.log("UnezQuake    : %s" % (opts.unez_dir or "(turned off in Settings)"))
+    rep.log("FTE          : %s" % (opts.fte_dir or "(turned off in Settings)"))
 
     if opts.configs_only or opts.mods_only:
         steps = 3
@@ -336,6 +384,7 @@ def run_install(opts, rep=None, cancel_event=None):
                 rep.step(2, steps, "Installing all configured mods")
                 man = manifest.load(root)
                 install_mods(opts, rep, result, work, cancel_event, man=man)
+                manifest.record_engines(man, opts)
                 result.manifest_path = manifest.save(root, man)
                 write_mod_configs(opts, rep, result)
             finally:
@@ -405,6 +454,7 @@ def run_install(opts, rep=None, cancel_event=None):
 
         rep.step(7, steps, "Configuring FTE (default.fmf / DISABLEHOMEDIR)")
         _configure_fte(opts, rep, result)
+        manifest.record_engines(man, opts)
         result.manifest_path = manifest.save(root, man)
         rep.log("  wrote %s" % result.manifest_path)
         return result
@@ -461,7 +511,7 @@ def install_clients(opts, rep, result, work, man, cancel_event=None, step_base=1
     label = clients.platform_label(opts.platform)
     rep.step(step_base, steps, "Downloading unezQuake (%s)" % label)
     if not opts.uses_unez:
-        rep.log("  unezQuake not selected in Settings; skipped")
+        rep.log("  unezQuake is turned off in Settings, so it isn't installed.")
     else:
         try:
             meta = clients.resolve_unez(opts.platform)
@@ -480,7 +530,7 @@ def install_clients(opts, rep, result, work, man, cancel_event=None, step_base=1
 
     rep.step(step_base + 1, steps, "Downloading FTE (%s)" % label)
     if not opts.uses_fte:
-        rep.log("  FTE not selected in Settings; skipped")
+        rep.log("  FTE is turned off in Settings, so it isn't installed.")
     else:
         try:
             meta = clients.resolve_fte(opts.platform)
@@ -613,10 +663,14 @@ def run_existing(opts, rep, cancel_event=None):
     result = Result()
     if not opts.unez_dir and not opts.fte_dir:
         raise InstallError("Choose an existing unezQuake folder and/or an FTE folder.")
+    opts.check_folders()
+    shared = opts.folder_warning()
+    if shared:
+        rep.log("  WARN: " + shared)
     for label, d, check in (("unezQuake", opts.unez_dir, existing.check_unez_folder),
                             ("FTE", opts.fte_dir, existing.check_fte_folder)):
         if not d:
-            rep.log("%-13s: (skipped)" % label)
+            rep.log("%-13s: (not used)" % label)
             continue
         if not os.path.isdir(d):
             raise InstallError("%s folder does not exist: %s" % (label, d))
@@ -671,7 +725,7 @@ def _configure_fte(opts, rep, result):
     if not result.unez_exe:
         result.unez_exe = find_unez(opts)
     if not opts.fte_dir:
-        rep.log("  FTE not selected in Settings; default.fmf skipped")
+        rep.log("  FTE is turned off in Settings, so default.fmf isn't written.")
         return
     path = launchers.ensure_fte_default_fmf(opts.fte_dir, log=rep.log)
     result.fte_fmf = path

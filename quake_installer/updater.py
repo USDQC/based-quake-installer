@@ -10,7 +10,7 @@ import os
 import shutil
 import tempfile
 
-from . import clients, download, manifest, mods as modlib
+from . import clients, download, folders, manifest, mods as modlib
 from .download import DownloadError
 
 
@@ -198,7 +198,7 @@ def platform_mismatch_note(root, running):
 
 
 def _client_dirs(spec, root, opts=None):
-    # CH - Mods follow the selected engines: an unselected client's dir is None, so
+    # CH - Mods follow the selected engines: a turned-off client has no folder, so
     # its gamedirs are never created or updated.
     from .constants import FTE_DIRNAME, UNEZ_DIRNAME
     if opts is not None:
@@ -217,6 +217,8 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
     opts with existing=True (mods-only): the clients are the user's own, so only
     mods/packs are checked, in opts.unez_dir / opts.fte_dir."""
     existing = bool(opts is not None and getattr(opts, "existing", False))
+    if opts is not None and not existing:
+        opts.use_manifest_dirs(override=True)
     man = manifest.load(root)
     mismatch = bool(man.get("platform")) and man["platform"] != platform
     comps = man.get("components", {})
@@ -227,9 +229,9 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
                                   ("client:fte", "FTE (%s)" % label, resolve_fte)):
         if existing:
             continue  # user's own client: never updated by us
-        if opts is not None and comp == "client:unez" and not getattr(opts, "uses_unez", True):
-            continue  # not selected in Settings
-        if opts is not None and comp == "client:fte" and not getattr(opts, "uses_fte", True):
+        if opts is not None and comp == "client:unez" and not opts.install_unez:
+            continue  # turned off in Settings (see turned_off_notes)
+        if opts is not None and comp == "client:fte" and not opts.install_fte:
             continue
         if mismatch:
             items.append(UpdateItem(comp, title, manifest.STATUS_PLATFORM, comps.get(comp), None,
@@ -258,7 +260,7 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
         specs, index_err = modlib.load_specs_online(log=log, get_text=get_text)
     for spec in specs:
         if not _client_dirs(spec, root, opts):
-            continue  # needs an engine that is not selected
+            continue  # needs an engine that is turned off in Settings
         if spec.get("binds_only"):
             continue  # server-side mod: nothing downloaded, nothing to update
         comp = "mod:" + spec["key"]
@@ -284,6 +286,31 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
     return items
 
 
+def turned_off_notes(root, opts, isdir=os.path.isdir):
+    """Lines for engines that are installed (manifest or on disk) but turned off in
+    Settings. Nothing is removed; they are just not updated."""
+    from .constants import FTE_DIRNAME, UNEZ_DIRNAME
+    if opts is None or opts.existing:
+        return []
+    man = manifest.load(root)
+    comps = man.get("components", {})
+    recorded = manifest.engine_dirs(man)
+    shared_dir = folders.same_folder(recorded.get("unez"), recorded.get("fte"))
+    notes = []
+    for key, name, on, dirname in (("unez", "unezQuake", opts.install_unez, UNEZ_DIRNAME),
+                                   ("fte", "FTE", opts.install_fte, FTE_DIRNAME)):
+        if on:
+            continue
+        folder = recorded.get(key) or os.path.join(root, dirname)
+        present = ("client:" + key) in comps
+        if not present and not shared_dir and isdir(folder):
+            present = True
+        if present:
+            notes.append("%s is installed but turned off in Settings, so it won't be "
+                         "updated." % name)
+    return notes
+
+
 def _mod_present(root, spec, opts=None):
     for label, target in _client_dirs(spec, root, opts):
         if modlib.is_present(spec, target):
@@ -298,9 +325,15 @@ def apply_updates(opts, items, rep, cancel_event=None):
     if existing:
         opts.root = installer.existing_manifest_root(opts)
         items = [i for i in items if not i.component.startswith("client:")]
-    if not getattr(opts, "uses_unez", True):
+    else:
+        opts.use_manifest_dirs(override=True)
+    opts.check_folders()
+    shared = opts.folder_warning()
+    if shared:
+        rep.log("  WARN: " + shared)
+    if not opts.install_unez:
         items = [i for i in items if i.component != "client:unez"]
-    if not getattr(opts, "uses_fte", True):
+    if not opts.install_fte:
         items = [i for i in items if i.component != "client:fte"]
     todo = [i for i in items if i.needs_update]
     updated, failed = [], []

@@ -165,8 +165,9 @@ class FteConfig(object):
 
     def describe(self):
         if self.mode == MODE_ASK:
-            return "FTE configs: unclear (%s)" % self.reason
-        return "FTE configs: %s  (%s)" % (self.write_root, self.reason)
+            return "FTE configs: needs a choice  (%s)" % self.reason
+        kind = "home folder" if self.mode == MODE_HOME else "install folder"
+        return "FTE configs: %s  (%s; %s)" % (self.write_root, kind, self.reason)
 
 
 def detect_fte_config(fte_dir, env=None, platform=None, writable=None):
@@ -178,9 +179,9 @@ def detect_fte_config(fte_dir, env=None, platform=None, writable=None):
     existing = [p for p, ok in cands if ok]
     home = existing[0] if existing else (cands[0][0] if cands else None)
     if mode == "never":
-        return FteConfig(MODE_INSTALL, fte_dir, home, "default.fmf disables the home dir")
+        return FteConfig(MODE_INSTALL, fte_dir, home, "disabled by default.fmf")
     if mode == "always":
-        return FteConfig(MODE_HOME, fte_dir, home, "default.fmf forces the home dir", cands)
+        return FteConfig(MODE_HOME, fte_dir, home, "forced by default.fmf", cands)
     if (platform or ("windows" if os.name == "nt" else "linux")) != "windows" and \
             env.get("FTEHOME"):
         return FteConfig(MODE_HOME, fte_dir, home, "FTEHOME is set", cands)
@@ -192,8 +193,7 @@ def detect_fte_config(fte_dir, env=None, platform=None, writable=None):
         if fmf is None or not fmf.get("game"):
             # no manifest naming the game: FTE's built-in game name may differ
             return FteConfig(MODE_ASK, fte_dir, home,
-                             "found home folder %s but no default.fmf names the game"
-                             % existing[0], cands)
-        return FteConfig(MODE_HOME, fte_dir, home, "home folder exists", cands)
-    return FteConfig(MODE_INSTALL, fte_dir, home,
-                     "no home folder yet and install folder is writable", cands)
+                             "home folder found, but default.fmf has no game name",
+                             cands)
+        return FteConfig(MODE_HOME, fte_dir, home, "found automatically", cands)
+    return FteConfig(MODE_INSTALL, fte_dir, home, "no FTE home folder found", cands)

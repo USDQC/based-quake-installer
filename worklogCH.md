@@ -181,3 +181,102 @@ Branch: `feat/settings` (from `main` @ f4d92f4; worklog brought over from `feat/
 - `SummaryCH.md`: full hand-off summary (author Chuma, assisted by DeepSeek 4.1).
 - Folder hint wording: `Installs to: ... (existing)/(new)`; mods-only
   `Mods go into: ...`; tests updated.
+
+## 2026-10-22 22:44 - Sisson's and Moose Feedback
+
+Source: Sisson (Grok-based Discord review) passed on by Moose.
+Branch: `CH-updates` only. These five notes are the scope of PR 1; no merge or
+cherry-pick from any other branch.
+
+### Specific notes
+- [x] **Dark theme black band** - the new scrolling area doesn't pick up Dark
+      colours, which leaves a black strip at the bottom.
+- [x] **Folder safety** - unezQuake and FTE could use the same folder or one
+      inside the other, which would mix their files. Chuma decision: a shared
+      folder is allowed with a warning, an install root / sibling folder is
+      allowed, and nesting is still rejected.
+- [x] **Updates remember where clients are** - with custom folders and
+      "remember folders" off, update checks could lose track and reinstall into
+      the default folders. The install record must save the real folders.
+- [x] **Turned-off clients** - an installed client that is unticked should show
+      a note in Check for updates instead of just vanishing.
+- [x] **Cleanup** - clearer wording, split the big Settings function. Chuma
+      keeps the work-log/notes files in the repo (deviation from the review).
+
+### Implementation
+- `folders.py`: one full-path check plus `check_existing_folders()` /
+  `check_engine_folders()`. Equal/shared folders are allowed with a warning;
+  an engine folder may equal the install root or be a sibling; nesting and an
+  engine folder above the install root are still rejected. `installed` folders
+  (from the manifest) are used for turned-off engines.
+- Enforced from Settings save, `_collect`, `_collect_existing`,
+  `run_install`, `run_existing` and `apply_updates`; GUI asks before a shared
+  folder, backend logs the warning.
+- `manifest.py`: `record_engines()` / `engine_dirs()` / `engine_folders()`;
+  `installer.Options` gained `use_manifest_dirs()`, `check_folders()` and
+  `folder_warning()`.
+- Full install and in-root mods-only save `engine_dirs`; Check for updates and
+  Apply updates follow the recorded folders (old manifests fall back).
+- `updater.turned_off_notes()`; GUI appends the note to the update summary and
+  log.
+- Dark theme: main scroll canvas is themed and fills the window; `_scrollable()`
+  canvases get the current theme background when created.
+- Settings moved to `quake_installer/settings_dialog.py`; hidden import added to
+  `build_exe.bat`; wording cleaned up. Notes and CH markers kept.
+- Tests: `tests/test_folders.py`; `tests/test_paths_hint.py` wording.
+
+### Progress
+- [x] Folder rules added and enforced (Settings, Install, mods-only, updates)
+- [x] Engine folders recorded in the manifest and used by update checks
+- [x] Note shown for installed-but-turned-off engines
+- [x] Dark theme canvas fill/recolor fixed (main window and dialogs)
+- [x] Settings moved to `settings_dialog.py`; wording cleaned up
+- [x] Tests pass; CLI/GUI self-tests pass
+
+### Verification
+- `python -m pytest -q tests -p no:cacheprovider` -> 228 passed, 7 skipped.
+- `python installer_cli.py --self-test` -> ok.
+- `python installer_gui.py --self-test <report>` -> ok.
+- Throwaway Tk smoke (temp APPDATA): Dark main canvas and Settings canvas both
+  `#1c1c1c`, matching the `TFrame` background.
+- `installer.Options(root=C:\nQuake, unez=C:\nQuake, fte=C:\fteqw)` passes
+  `check_folders()` with no shared-folder warning.
+- Rebuilt `dist\BQICH.exe` (11,370,809 bytes); frozen `--self-test` exit 0 and
+  `folders` / `settings_dialog` are bundled.
+
+## 2026-10-23 08:11 - Action bar layout
+
+- Action bar is now a 3-column layout: left install actions, centre folder
+  button, right installer-update group.
+- Left: `Install` / `Update configs only` / `Check for updates` / `Cancel`.
+  Centre: `Open game folder` (centred in the free space). Right: self-update
+  notice + `Update installer`.
+- Tk smoke: folder centre at x=909, midpoint between the groups x=914 (within
+  6px); no fixed padding hack.
+- Rebuilt `dist\BQICH.exe` (11,371,144 bytes), frozen self-test exit 0;
+  pytest 228 passed, 7 skipped.
+- FTE config wording change deferred (blue-line question).
+
+## 2026-10-23 08:27 - Version 1.7.0
+
+- Bumped `quake_installer/__init__.py` from `1.6.9` to `1.7.0`; the GUI header,
+  CLI `--version` and self-test report now show 1.7.0.
+- Manual still says 1.6.9 (not changed in this pass).
+- pytest 228 passed, 7 skipped.
+- Rebuilt `dist\BQICH.exe` (11,371,085 bytes); frozen self-test version 1.7.0,
+  exit 0.
+
+## 2026-10-23 08:41 - FTE config wording
+
+- `existing.py`: role + short reason. Examples:
+  `FTE configs: C:\fteqw  (install folder; no FTE home folder found)`,
+  `(home folder; found automatically)`, `(install folder; disabled by default.fmf)`,
+  `(home folder; forced by default.fmf)`, `needs a choice`.
+- `gui.py`: the "your choice" line now names the folder role; the prompt reads
+  "Where does FTE save its configs?"; "FTE folder not found yet." -> "FTE folder
+  not found."; log says "FTE config folder".
+- Added `test_describe_wording` (no cfg required; folder layout decides).
+- pytest 229 passed, 7 skipped.
+- Rebuilt BQICH cleanly (11,370,934 bytes, 08:42); frozen self-test version
+  1.7.0, exit 0. Removed the temporary `dist\BQICH-old.exe` after closing the
+  old instance.
