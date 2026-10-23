@@ -58,9 +58,9 @@ class WindowsRulesTests(unittest.TestCase):
         ok(self.R, "D:\\Q", "D:\\Q2", self.W)
 
     def test_equals_root_is_forbidden(self):
-        self.bad("C:\\games", None, text="install folder itself")
-        self.bad(None, "C:\\Games\\", text="install folder itself")
-        self.bad("C:\\nQuake", "C:\\fteqw", root="C:\\nQuake", text="install folder itself")
+        self.bad("C:\\games", None, text="same as the install folder")
+        self.bad(None, "C:\\Games\\", text="same as the install folder")
+        self.bad("C:\\nQuake", "C:\\fteqw", root="C:\\nQuake", text="same as the install folder")
 
     def test_ancestor_of_root(self):
         self.bad("C:\\", None, text="contain the install folder")

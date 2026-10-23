@@ -74,12 +74,13 @@ class SettingsDialog(object):
                 pady=(0, 6 if row == 0 else 0))
             ent.bind("<KeyRelease>", lambda _e: self._hints())
         ttk.Label(eng, style="Muted.TLabel", wraplength=WRAP, justify="left",
-                  text="Leave a folder empty to use the standard folder inside the "
-                       "install folder. unezQuake and FTE need their own separate "
-                       "folders — not the install folder itself, and not nested inside "
-                       "each other. An existing folder is reused and your cfgs are never "
-                       "overwritten. Engines you untick are not downloaded, updated, or "
-                       "given mods."
+                  text="To use the usual layout, leave these empty: unezQuake and FTE "
+                       "each go in their own folder under your install folder. Or pick "
+                       "a different folder for either one. The two clients must stay in "
+                       "separate folders, not the install folder itself, and not inside "
+                       "each other. An existing folder is reused and your cfg files are "
+                       "never overwritten. Unticked engines are not downloaded, updated, "
+                       "or given mods."
                   ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
     def _build_folders(self, inner):
@@ -88,9 +89,10 @@ class SettingsDialog(object):
         ttk.Checkbutton(fold, text="Remember install directory and client folders",
                         variable=self.v_remember).pack(anchor="w")
         ttk.Label(fold, style="Muted.TLabel", wraplength=WRAP, justify="left",
-                  text="When this is off, the installer starts from the default folder "
-                       "every time. Your name, binds and look are still remembered, and "
-                       "updates still find the folders recorded in your install."
+                  text="When this is off, the install folder and client folders are not "
+                       "remembered for next time. Your name, binds and look still are, "
+                       "and Check for updates still uses the folders recorded from your "
+                       "last install."
                   ).pack(anchor="w")
 
     def _build_appearance(self, inner):

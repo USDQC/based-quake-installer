@@ -112,8 +112,9 @@ def check_engine_folders(root, unez, fte, windows=HOST_WINDOWS, installed=None):
         name = NAMES[kind]
         if r and d == r:
             raise FolderError(
-                "The %s folder can't be the install folder itself. Leave it empty "
-                "to use %s, or pick a folder of its own." % (name, defaults[kind]))
+                "The %s folder can't be the same as the install folder. Leave it "
+                "empty to put %s in %s, or choose another folder."
+                % (name, name, defaults[kind]))
         if r and is_inside(r, d, windows):
             raise FolderError(
                 "The %s folder can't contain the install folder. Pick a folder that "
