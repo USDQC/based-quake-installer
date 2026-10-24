@@ -78,9 +78,10 @@ class SettingsDialog(object):
                        "each go in their own folder under your install folder. Or pick "
                        "a different folder for either one. The two clients must stay in "
                        "separate folders, not the install folder itself, and not inside "
-                       "each other. An existing folder is reused and your cfg files are "
-                       "never overwritten. Unticked engines are not downloaded, updated, "
-                       "or given mods."
+                       "each other. If you already have unezQuake or FTE, point its box at "
+                       "that folder: the installer updates the client and installs the "
+                       "mods there, and keeps your own cfg files. Unticked engines are "
+                       "not downloaded, updated, or given mods."
                   ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
     def _build_folders(self, inner):
