@@ -60,6 +60,29 @@ def _load_sv_ttk():
         return None
 
 
+def wheel_steps(num=None, delta=0):
+    """Scroll units for one wheel event: Linux Button-4/5, or <MouseWheel> delta
+    (Windows/Tk 9 send multiples of 120, older macOS Tk sends small values)."""
+    if num == 4:
+        return -2
+    if num == 5:
+        return 2
+    if not delta:
+        return 0
+    if abs(delta) >= 120:
+        return -int(delta / 120)
+    return -1 if delta > 0 else 1
+
+
+def can_scroll(canvas):
+    """True when a scrollable canvas' content is taller than the visible area."""
+    try:
+        first, last = canvas.yview()
+    except Exception:
+        return False
+    return first > 0.0 or last < 1.0
+
+
 def center_window(win, parent=None, margin_x=0, margin_y=0):
     """Place win centered on parent (if given & mapped) or on its screen, without
     a visible jump. Sizes are in real pixels, so this works with DPI scaling.
@@ -413,6 +436,7 @@ class InstallerApp(object):
         self.mod_bind_vars = {}  # mod_key -> {action_id -> StringVar}
         self.radios = []
         self.preset_buttons = []
+        self._wheel_pane = None  # inner scrollable pane under the mouse, if any
 
         self._build()
         self._load_settings()
@@ -452,25 +476,50 @@ class InstallerApp(object):
     def _main_wheel(self, event):
         """Wheel over the main window scrolls it, except over self-scrolling widgets."""
         try:
-            if event.widget is None or event.widget.winfo_toplevel() is not self.root:
-                return
-        except tk.TclError:
+            top = event.widget.winfo_toplevel() if event.widget is not None else None
+        except (tk.TclError, AttributeError):
+            return
+        if top is None:
             return
         if isinstance(event.widget, (tk.Text, tk.Listbox, ttk.Combobox)):
             return
-        num = getattr(event, "num", None)
-        if num == 4:
-            self.main_canvas.yview_scroll(-2, "units")
-        elif num == 5:
-            self.main_canvas.yview_scroll(2, "units")
+        steps = wheel_steps(getattr(event, "num", None), getattr(event, "delta", 0))
+        if not steps:
+            return
+        # An inner pane (bind lists) under the cursor scrolls itself when its
+        # content overflows; otherwise the whole window scrolls.
+        pane = self._wheel_pane
+        try:
+            pane_ok = pane is not None and pane.winfo_toplevel() is top and can_scroll(pane)
+        except tk.TclError:
+            pane_ok = False
+        if pane_ok:
+            pane.yview_scroll(steps, "units")
+        elif top is self.root:
+            self.main_canvas.yview_scroll(steps, "units")
         else:
-            delta = getattr(event, "delta", 0)
-            if not delta:
-                return
-            self.main_canvas.yview_scroll(
-                int(-delta / (120 if IS_WINDOWS else 1)) or (-1 if delta > 0 else 1),
-                "units")
+            return
         return "break"
+
+    def _register_wheel_pane(self, canvas):
+        """Track the pane under the cursor (Enter/Leave of the canvas; children keep
+        it since Leave with detail NotifyInferior is ignored)."""
+        def _enter(_e):
+            self._wheel_pane = canvas
+
+        def _leave(e):
+            if getattr(e, "detail", "") == "NotifyInferior":
+                return
+            if self._wheel_pane is canvas:
+                self._wheel_pane = None
+
+        canvas.bind("<Enter>", _enter, add="+")
+        canvas.bind("<Leave>", _leave, add="+")
+        top = canvas.winfo_toplevel()
+        if top is not self.root and not getattr(top, "_bqi_wheel", False):
+            top._bqi_wheel = True  # dialogs: same dispatcher on their own window
+            for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                top.bind(seq, self._main_wheel, add="+")
 
     # ------------------------------------------------------------------ layout
     def _build(self):
@@ -656,6 +705,7 @@ class InstallerApp(object):
 
         inner.bind("<Configure>", _on_configure)
         canvas.bind("<Configure>", _on_configure)
+        self._register_wheel_pane(canvas)
 
         mid = (len(cfg.BIND_ACTIONS) + 1) // 2
         for i, (action_id, _cmd, label) in enumerate(cfg.BIND_ACTIONS):
@@ -1029,27 +1079,7 @@ class InstallerApp(object):
         inner.bind("<Configure>", _cfg)
         canvas.bind("<Configure>", _cfg)
 
-        def _wheel(e):
-            if getattr(e, "num", None) == 4:
-                canvas.yview_scroll(-2, "units")
-            elif getattr(e, "num", None) == 5:
-                canvas.yview_scroll(2, "units")
-            else:
-                canvas.yview_scroll(int(-e.delta / (120 if IS_WINDOWS else 1)) or
-                                    (-1 if e.delta > 0 else 1), "units")
-
-        def _enter(_e):
-            canvas.bind_all("<MouseWheel>", _wheel)
-            canvas.bind_all("<Button-4>", _wheel)
-            canvas.bind_all("<Button-5>", _wheel)
-
-        def _leave(_e):
-            canvas.unbind_all("<MouseWheel>")
-            canvas.unbind_all("<Button-4>")
-            canvas.unbind_all("<Button-5>")
-
-        canvas.bind("<Enter>", _enter)
-        canvas.bind("<Leave>", _leave)
+        self._register_wheel_pane(canvas)
         return inner
 
     def _settings_values(self):
