@@ -29,7 +29,10 @@ MODE_FULL = "full"
 MODE_EXISTING = "existing"
 MODE_LABELS = ((MODE_FULL, "Full install"), (MODE_EXISTING, "Mods only (existing clients)"))
 
-THEMES = (("classic", "Classic"), ("sv-dark", "Dark"))
+# "classic" stays the saved key (the Light look); old saved values map onto it.
+THEMES = (("classic", "Light"), ("sv-dark", "Dark"))
+THEME_ALIASES = {"classic": "classic", "light": "classic", "sv-light": "classic",
+                 "sun-valley-light": "classic", "dark": "sv-dark", "sv-dark": "sv-dark"}
 # Colours for the plain tk widgets (Text, Canvas, KeyBox entries) and muted labels.
 PALETTES = {
     "light": {"bg": None, "field": "white", "fg": "black", "disabled": "#eeeeee",
@@ -859,7 +862,7 @@ class InstallerApp(object):
         for k, label in THEMES:
             if label == name or k == name:
                 return k
-        return "classic"
+        return THEME_ALIASES.get(str(name).strip().lower(), "classic")
 
     def _circle_img(self, size, fill, ring):
         img = tk.PhotoImage(master=self.root, width=size + 7, height=size)
@@ -935,7 +938,7 @@ class InstallerApp(object):
                     raise ImportError("sv_ttk not available")
                 sv.set_theme("dark" if key == "sv-dark" else "light", self.root)
             except Exception as exc:  # never fail the app over a theme
-                self._log("WARN: Sun Valley theme unavailable (%s); using Classic" % exc)
+                self._log("WARN: Sun Valley theme unavailable (%s); using Light" % exc)
                 key = "classic"
                 self.var_theme.set(THEMES[0][1])
         if key == "classic":
@@ -952,7 +955,7 @@ class InstallerApp(object):
 
     def _undo_sv_palette(self):
         """sv_ttk calls tk_setPalette and restyles '.', and Tk keeps those colours
-        after switching back. Re-apply the Classic palette and root style."""
+        after switching back. Re-apply the Light palette and root style."""
         if not getattr(self.root, "_sv_ttk_loaded", False):
             return
         style = ttk.Style()
@@ -1097,8 +1100,9 @@ class InstallerApp(object):
                     self.fte_cfg_choice = dict(data["fte_cfg_choice"])
                 if data.get("root"):
                     self.var_root.set(data["root"])
+            saved = THEME_ALIASES.get(str(data.get("theme") or "").strip().lower())
             for k, label in THEMES:
-                if data.get("theme") == k:
+                if saved == k:
                     self.var_theme.set(label)
             if self._theme_key() != "classic":
                 self._apply_theme()

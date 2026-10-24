@@ -240,7 +240,7 @@ Click the **cog** in the top-right corner (or press **Ctrl+,**).
 
 **Folders.** *Remember install directory and client folders* is on by default. When it is off, the install folder and client folders are not remembered for next time; your name, binds and look still are, and Check for updates still uses the folders recorded from your last install.
 
-**Appearance.** Choose between the **Classic** and **Dark** themes for the installer window.
+**Appearance.** Choose between the **Light** and **Dark** themes for the installer window.
 
 **Installer updates.** *Check for a new installer when it starts* only shows a small "Installer X is available" notice; nothing is downloaded or replaced until you click **Update installer** and choose **Update now**.
 
