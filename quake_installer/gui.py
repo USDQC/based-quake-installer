@@ -17,7 +17,7 @@ import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from . import (__version__, cfg, binds_mods, folders, keycapture, mods as modlib,
+from . import (__version__, cfg, binds_mods, crossfade, folders, keycapture, mods as modlib,
                selfupdate, settings)
 from .constants import (APP_TITLE, DEFAULT_ROOT, FTE_DIRNAME, LOOK_GL, LOOK_SOFT,
                         MAX_NAME_LEN, PLATFORM_LABELS, UNEZ_DIRNAME, host_platform)
@@ -1034,6 +1034,21 @@ class InstallerApp(object):
         dark = self._theme_key() == "sv-dark"
         cover_bg = PALETTES["dark"]["bg"] if dark else (
             (self.classic_style or {}).get("background") or "#dcdad5")
+        # Seamless: a snapshot of the old look sits on top while the window restyles
+        # underneath, then fades out. Falls back to the freeze/cover switch.
+        fade = crossfade.start(self.root)
+        if fade is not None:
+            try:
+                thaw = _freeze_redraw(self.root, cover_bg) if IS_WINDOWS else None
+                try:
+                    self._apply_theme_now(save, settle=True)
+                finally:
+                    if thaw:
+                        thaw()
+                self.root.update_idletasks()
+            finally:
+                fade.fade()
+            return
         thaw = _freeze_redraw(self.root, cover_bg)
         try:
             self._apply_theme_now(save, settle=True)
