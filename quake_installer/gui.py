@@ -426,6 +426,7 @@ class InstallerApp(object):
         self._update_fte_cfg()
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.minsize(min(960, max(760, sw - 80)), min(760, max(560, sh - 144)))
+        self._fit_to_content(sw, sh)
         center_window(root, margin_x=24, margin_y=72)
         root.deiconify()
         root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -434,6 +435,16 @@ class InstallerApp(object):
         selfupdate.cleanup_old()  # the exe left over from the last self-update
         if self.var_self_auto.get():
             root.after(1500, lambda: self._start_self_check(quiet=True))
+
+    def _fit_to_content(self, sw, sh, margin_x=24, margin_y=72):
+        """Ask for the content's real (DPI-scaled) size, capped to the screen, so
+        high Windows scaling widens the window instead of clipping its right side."""
+        self.root.update_idletasks()
+        bar = self.main_scroll.winfo_reqwidth()
+        want_w = self._main_outer.winfo_reqwidth()
+        self.main_canvas.configure(width=min(want_w, sw - 2 * margin_x - bar))
+        mw, mh = self.root.minsize()
+        self.root.minsize(min(mw, sw - 2 * margin_x), min(mh, sh - 2 * margin_y))
 
     def _main_wheel(self, event):
         """Wheel over the main window scrolls it, except over self-scrolling widgets."""
@@ -483,9 +494,22 @@ class InstallerApp(object):
         self.main_window = self.main_canvas.create_window((0, 0), window=holder,
                                                           anchor="nw")
 
+        # Horizontal bar only appears when the content can't fit (very high scaling
+        # on a small screen); otherwise the window is sized to the content.
+        self.main_hscroll = ttk.Scrollbar(shell, orient="horizontal",
+                                          command=self.main_canvas.xview)
+        self.main_canvas.configure(xscrollcommand=self.main_hscroll.set)
+        self._main_outer = outer
+
         def _sync(_e=None):
+            cw = self.main_canvas.winfo_width()
+            need = outer.winfo_reqwidth()
+            if cw > 1 and need > cw:
+                self.main_hscroll.grid(row=1, column=0, sticky="ew")
+            else:
+                self.main_hscroll.grid_remove()
             self.main_canvas.itemconfigure(
-                self.main_window, width=self.main_canvas.winfo_width(),
+                self.main_window, width=max(cw, need),
                 height=max(outer.winfo_reqheight(), self.main_canvas.winfo_height()))
             self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
 
