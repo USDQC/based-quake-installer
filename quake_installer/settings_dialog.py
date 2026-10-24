@@ -204,9 +204,12 @@ class SettingsDialog(object):
         app.var_fte_target.set(f)
         app.var_remember_dirs.set(self.v_remember.get())
         app.var_self_auto.set(self.v_self.get())
-        if self.v_theme.get() != app.var_theme.get():
-            app.var_theme.set(self.v_theme.get())
-            app._apply_theme(save=True)
+        new_theme = self.v_theme.get()
+        theme_changed = new_theme != app.var_theme.get()
+        if theme_changed:
+            app.var_theme.set(new_theme)
         settings.save(app._settings_values())
         app._update_paths()
-        self.win.destroy()
+        self.win.destroy()  # close first: no point restyling a window that's going away
+        if theme_changed:
+            app._apply_theme(save=True)

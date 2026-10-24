@@ -60,6 +60,47 @@ def _load_sv_ttk():
         return None
 
 
+def _freeze_redraw(root, cover_bg):
+    """Stop the window repainting until the returned thaw() is called.
+
+    Windows: WM_SETREDRAW on the top-level frame, then one full redraw. Elsewhere:
+    a plain cover in the new background colour over the window while it restyles.
+    """
+    if IS_WINDOWS:
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = int(root.wm_frame(), 16)
+            user32.SendMessageW(hwnd, 0x000B, 0, 0)  # WM_SETREDRAW off
+
+            def thaw():
+                try:
+                    root.update_idletasks()
+                finally:
+                    user32.SendMessageW(hwnd, 0x000B, 1, 0)
+                    # RDW_INVALIDATE|RDW_ERASE|RDW_FRAME|RDW_ALLCHILDREN|RDW_UPDATENOW
+                    user32.RedrawWindow(hwnd, None, None, 0x1 | 0x4 | 0x400 | 0x80 | 0x100)
+            return thaw
+        except Exception:
+            pass
+    try:
+        cover = tk.Frame(root, background=cover_bg, borderwidth=0, highlightthickness=0)
+        cover.place(x=0, y=0, relwidth=1, relheight=1)
+        cover.lift()
+        root.update_idletasks()
+    except tk.TclError:
+        return lambda: None
+
+    def thaw():
+        try:
+            root.update_idletasks()
+            cover.destroy()
+            root.update_idletasks()
+        except tk.TclError:
+            pass
+    return thaw
+
+
 def wheel_steps(num=None, delta=0):
     """Scroll units for one wheel event: Linux Button-4/5, or <MouseWheel> delta
     (Windows/Tk 9 send multiples of 120, older macOS Tk sends small values)."""
@@ -459,6 +500,7 @@ class InstallerApp(object):
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         root.bind("<Control-comma>", lambda _e: self._open_settings())
         root.after(100, self._poll)
+        root.after(400, self._preload_sv)
         selfupdate.cleanup_old()  # the exe left over from the last self-update
         if self.var_self_auto.get():
             root.after(1500, lambda: self._start_self_check(quiet=True))
@@ -979,6 +1021,38 @@ class InstallerApp(object):
         self._dark_radio_themes = done
 
     def _apply_theme(self, save=False):
+        """Switch theme behind a frozen window so it changes in one step instead of
+        widgets repainting one by one with half-applied colours."""
+        shown = False
+        try:
+            shown = bool(self.root.winfo_ismapped())
+        except tk.TclError:
+            pass
+        if not shown:
+            self._apply_theme_now(save, settle=False)
+            return
+        dark = self._theme_key() == "sv-dark"
+        cover_bg = PALETTES["dark"]["bg"] if dark else (
+            (self.classic_style or {}).get("background") or "#dcdad5")
+        thaw = _freeze_redraw(self.root, cover_bg)
+        try:
+            self._apply_theme_now(save, settle=True)
+        finally:
+            thaw()
+
+    def _preload_sv(self):
+        """Source the Sun Valley theme once at startup (first switch is then quick)."""
+        if getattr(self.root, "_sv_ttk_loaded", False):
+            return
+        sv = _load_sv_ttk()
+        if sv is None:
+            return
+        try:
+            sv._load_theme(ttk.Style(master=self.root))
+        except Exception:
+            pass
+
+    def _apply_theme_now(self, save=False, settle=False):
         key = self._theme_key()
         style = ttk.Style()
         if key.startswith("sv-"):
@@ -998,6 +1072,10 @@ class InstallerApp(object):
                 pass
             self._undo_sv_palette()
         style.configure("Clear.TButton", padding=(2, 0))
+        if settle:
+            # Run the queued <<ThemeChanged>> handlers (sv_ttk's tk_setPalette walk)
+            # now, while frozen, so our colours below are applied last.
+            self.root.update()
         self._recolor()
         self._update_gear_image()
         if save:
