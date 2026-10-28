@@ -16,7 +16,9 @@ KEYS = ("root", "player_name", "look", "binds", "mod_binds", "check_installer_up
         # CH - Settings window: which engines to install, per-engine target folders
         # and whether folder values are remembered at all.
         "remember_dirs", "install_unez", "install_fte",
-        "unez_install_path", "fte_install_path")
+        "unez_install_path", "fte_install_path",
+        # Which mods are ticked on the main screen ({key: bool}).
+        "mod_picks")
 
 
 def settings_dir():
@@ -44,6 +46,8 @@ def load(folder=None):
     out = {k: data[k] for k in KEYS if k in data}
     if not isinstance(out.get("binds", {}), dict):
         out.pop("binds", None)
+    if not isinstance(out.get("mod_picks", {}), dict):
+        out.pop("mod_picks", None)
     if not isinstance(out.get("mod_binds", {}), dict):
         out.pop("mod_binds", None)
     return out

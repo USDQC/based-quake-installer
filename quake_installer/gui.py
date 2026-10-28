@@ -234,6 +234,43 @@ def _clients_label(spec):
     return ""
 
 
+_CLIENT_NAMES = {"unez": "unezQuake", "fte": "FTE"}
+
+
+def mod_clients(spec):
+    return list(spec.get("clients") or ["fte"])
+
+
+def mod_pick_label(spec):
+    """Checklist text: the mod name, plus the client it needs when it runs in only one."""
+    name = _MOD_SHORT_TITLES.get(spec.get("key"), spec.get("title", spec.get("key", "?")))
+    cl = mod_clients(spec)
+    if len(cl) == 1:
+        return "%s (%s only)" % (name, _CLIENT_NAMES.get(cl[0], cl[0]))
+    return name
+
+
+def mod_pick_state(spec, unez_on, fte_on):
+    """(available, note) for one mod given which clients are picked. A mod is
+    available when at least one of its clients is picked; the note says why not."""
+    on = {"unez": bool(unez_on), "fte": bool(fte_on)}
+    cl = mod_clients(spec)
+    if any(on.get(c) for c in cl):
+        return True, ""
+    need = " or ".join(_CLIENT_NAMES.get(c, c) for c in cl)
+    return False, "needs %s" % need
+
+
+def selected_mod_keys(specs, picks, unez_on, fte_on):
+    """Mod keys to install: ticked and runnable in at least one picked client.
+    picks: {key: bool}; a key missing from picks counts as ticked (new mods)."""
+    out = []
+    for spec in specs:
+        if picks.get(spec["key"], True) and mod_pick_state(spec, unez_on, fte_on)[0]:
+            out.append(spec["key"])
+    return out
+
+
 def _mod_list_line(spec):
     name = _MOD_SHORT_TITLES.get(spec.get("key"), spec.get("title", spec.get("key", "?")))
     tag = _clients_label(spec)
@@ -471,6 +508,11 @@ class InstallerApp(object):
         self.var_self_auto = tk.BooleanVar(value=True)
         self.self_worker = None
         self.mod_specs = modlib.load_specs()
+        # Per-mod "install this" ticks (all on by default; remembered in settings).
+        self.mod_pick_vars = {m["key"]: tk.BooleanVar(value=True) for m in self.mod_specs}
+        self.mod_pick_boxes = {}
+        self.mod_pick_notes = {}
+        self.client_boxes = []
         self.bind_vars = {}   # action_id -> StringVar (start empty)
         self.bind_entries = []
         self.bind_boxes = []  # KeyBox widgets (general + every mod page)
@@ -489,6 +531,8 @@ class InstallerApp(object):
         self.var_fte.trace_add("write", lambda *a: self._update_fte_cfg())
         self.var_unez.trace_add("write", lambda *a: self._update_paths())
         self.var_fte.trace_add("write", lambda *a: self._update_paths())
+        for v in (self.var_install_unez, self.var_install_fte, self.var_unez, self.var_fte):
+            v.trace_add("write", lambda *a: self._refresh_mod_picks())
         self._update_paths()
         self._show_mode()
         self._update_fte_cfg()
@@ -818,23 +862,52 @@ class InstallerApp(object):
             self.var_mod_page.set(titles[0])
             _show_page()
 
-        # Right: included mods (always installed; informational only)
-        m = ttk.LabelFrame(outer, text="Included mods", padding=6)
+        # Right: what to install - clients, then a mod checklist.
+        m = ttk.LabelFrame(outer, text="What to install", padding=6)
         m.grid(row=2, column=1, sticky="nsew", **pad)
         m.columnconfigure(0, weight=1)
+        crow = ttk.Frame(m)
+        crow.grid(row=0, column=0, sticky="ew")
+        ttk.Label(crow, text="Clients:").pack(side="left")
+        for text, var in (("unezQuake", self.var_install_unez), ("FTE", self.var_install_fte)):
+            cb = ttk.Checkbutton(crow, text=text, variable=var)
+            cb.pack(side="left", padx=(8, 0))
+            self.client_boxes.append(cb)
+        self.var_client_note = tk.StringVar()
+        self.lbl_client_note = ttk.Label(m, textvariable=self.var_client_note,
+                                         style="Muted.TLabel", justify="left",
+                                         wraplength=280)
+        self.lbl_client_note.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+        mhead = ttk.Frame(m)
+        mhead.grid(row=2, column=0, sticky="ew", pady=(8, 2))
+        ttk.Label(mhead, text="Mods:").pack(side="left")
+        self.btn_mods_none = ttk.Button(mhead, text="Select none",
+                                        command=lambda: self._set_all_mods(False))
+        self.btn_mods_none.pack(side="right")
+        self.btn_mods_all = ttk.Button(mhead, text="Select all",
+                                       command=lambda: self._set_all_mods(True))
+        self.btn_mods_all.pack(side="right", padx=(0, 6))
+        mlist = ttk.Frame(m)
+        mlist.grid(row=3, column=0, sticky="ew")
+        mlist.columnconfigure(1, weight=1)
         for r, spec in enumerate(self.mod_specs):
-            ttk.Label(m, text=_mod_list_line(spec)).grid(
-                row=r, column=0, sticky="w", pady=1)
-        note_row = len(self.mod_specs)
-        note = ttk.Label(
-            m, style="Muted.TLabel", wraplength=280, justify="left",
-            text="AirQuake, Quake Rally and FvF are FTE-only; the spray pack is "
-                 "unezQuake-only."
-        )
-        note.grid(row=note_row, column=0, sticky="ew", pady=(8, 0))
-        # Wrap to the panel's real width so the note never gets clipped.
-        m.bind("<Configure>", lambda e, w=note: w.configure(
-            wraplength=max(120, e.width - 24)))
+            key = spec["key"]
+            cb = ttk.Checkbutton(mlist, text=mod_pick_label(spec),
+                                 variable=self.mod_pick_vars[key],
+                                 command=self._refresh_mod_picks)
+            cb.grid(row=r, column=0, sticky="w", pady=1)
+            note = ttk.Label(mlist, text="", style="Muted.TLabel")
+            note.grid(row=r, column=1, sticky="w", padx=(8, 0))
+            self.mod_pick_boxes[key] = cb
+            self.mod_pick_notes[key] = note
+        self.var_mod_summary = tk.StringVar()
+        summ = ttk.Label(m, textvariable=self.var_mod_summary, style="Muted.TLabel",
+                         justify="left", wraplength=280)
+        summ.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        # Wrap to the panel's real width so notes never get clipped.
+        m.bind("<Configure>", lambda e: [w.configure(wraplength=max(120, e.width - 24))
+                                         for w in (summ, self.lbl_client_note)])
+        self._refresh_mod_picks()
 
         # Buttons (installer only — no Launch, no bats, no mods-only)
         b = ttk.Frame(outer)
@@ -1190,6 +1263,7 @@ class InstallerApp(object):
             "remember_dirs": bool(self.var_remember_dirs.get()),
             "install_unez": bool(self.var_install_unez.get()),
             "install_fte": bool(self.var_install_fte.get()),
+            "mod_picks": self._mod_picks(),
         }
         if values["remember_dirs"]:
             values.update({
@@ -1212,6 +1286,10 @@ class InstallerApp(object):
             self.var_remember_dirs.set(remember)
             self.var_install_unez.set(data.get("install_unez", True) is not False)
             self.var_install_fte.set(data.get("install_fte", True) is not False)
+            for k, on in (data.get("mod_picks") or {}).items():
+                if k in self.mod_pick_vars:
+                    self.mod_pick_vars[k].set(bool(on))
+            self._refresh_mod_picks()
             if data.get("install_mode") in (MODE_FULL, MODE_EXISTING):
                 self.var_mode.set(data["install_mode"])
             if remember:
@@ -1259,8 +1337,67 @@ class InstallerApp(object):
     def _existing_mode(self):
         return self.var_mode.get() == MODE_EXISTING
 
+    def _pick_clients(self):
+        """(unez_on, fte_on) the mod list follows: the client ticks for a full
+        install, or which existing folders are filled in for mods-only."""
+        if self._existing_mode():
+            return bool(self.var_unez.get().strip()), bool(self.var_fte.get().strip())
+        return bool(self.var_install_unez.get()), bool(self.var_install_fte.get())
+
+    def _set_all_mods(self, on):
+        unez, fte = self._pick_clients()
+        for spec in self.mod_specs:
+            if on or mod_pick_state(spec, unez, fte)[0]:
+                self.mod_pick_vars[spec["key"]].set(on)
+        self._refresh_mod_picks()
+
+    def _refresh_mod_picks(self):
+        if not getattr(self, "mod_pick_boxes", None) or not hasattr(self, "var_mod_summary"):
+            return
+        unez, fte = self._pick_clients()
+        busy = getattr(self, "worker_busy_hint", False)
+        for spec in self.mod_specs:
+            key = spec["key"]
+            ok, note = mod_pick_state(spec, unez, fte)
+            self.mod_pick_boxes[key].configure(state="normal" if ok and not busy else "disabled")
+            self.mod_pick_notes[key].configure(text=note)
+        existing = self._existing_mode()
+        for cb in self.client_boxes:
+            cb.configure(state="disabled" if (existing or busy) else "normal")
+        if existing:
+            self.var_client_note.set("For mods only, the client folders you pick above "
+                                     "decide which clients get mods.")
+        elif not unez and not fte:
+            self.var_client_note.set("Pick at least one client to install.")
+        else:
+            self.var_client_note.set("")
+        n = len(selected_mod_keys(self.mod_specs, self._mod_picks(), unez, fte))
+        greyed = any(not mod_pick_state(sp, unez, fte)[0] for sp in self.mod_specs)
+        if not unez and not fte:
+            self.var_mod_summary.set("")
+        elif n == 0:
+            self.var_mod_summary.set("No mods selected, so only the client%s will be "
+                                     "installed." % ("s" if unez and fte else ""))
+        else:
+            self.var_mod_summary.set("%d of %d mods will be installed.%s" % (
+                n, len(self.mod_specs),
+                " Greyed-out mods need a client you haven't picked, so they are "
+                "skipped." if greyed else ""))
+        if self.var_client_note.get():
+            self.lbl_client_note.grid()
+        else:
+            self.lbl_client_note.grid_remove()
+
+    def _mod_picks(self):
+        return {k: bool(v.get()) for k, v in self.mod_pick_vars.items()}
+
+    def _selected_mods(self):
+        unez, fte = self._pick_clients()
+        return selected_mod_keys(self.mod_specs, self._mod_picks(), unez, fte)
+
     def _show_mode(self):
         self._update_paths()
+        self._refresh_mod_picks()
         if self._existing_mode():
             self.frm_full.grid_remove()
             self.frm_exist.grid()
@@ -1406,6 +1543,10 @@ class InstallerApp(object):
             w.configure(state=st)
         for box in self.bind_boxes:
             box.set_enabled(not busy)
+        for w in (self.btn_mods_all, self.btn_mods_none):
+            w.configure(state=st)
+        self.worker_busy_hint = busy
+        self._refresh_mod_picks()
         self.btn_cancel.configure(state="normal" if busy else "disabled")
 
     # --------------------------------------------------------------- actions
@@ -1434,19 +1575,20 @@ class InstallerApp(object):
             raise ValueError("Please enter a player name.")
         name = name if name.strip() else "player"
         if not self.var_install_unez.get() and not self.var_install_fte.get():
-            raise ValueError("Choose at least one engine in Settings (unezQuake or FTE).")
+            raise ValueError("Pick at least one client to install (unezQuake, FTE, or "
+                             "both) under What to install.")
         try:
             binds = self._collect_binds()
         except ValueError as exc:
             raise ValueError("Invalid key in binds: %s" % exc)
-        # Always install every configured mod (no checkboxes).
         try:
             mod_binds = self._collect_mod_binds()
         except ValueError as exc:
             raise ValueError("Invalid key in mod binds: %s" % exc)
         opts = Options(root=root, player_name=name, look=self.var_look.get(),
                        binds=binds, write_bats=False, configs_only=configs_only,
-                       mods=None, mod_files={}, mods_only=False, mod_binds=mod_binds,
+                       mods=self._selected_mods(), mod_files={}, mods_only=False,
+                       mod_binds=mod_binds,
                        platform=self.platform,
                        install_unez=bool(self.var_install_unez.get()),
                        install_fte=bool(self.var_install_fte.get()),
@@ -1489,8 +1631,8 @@ class InstallerApp(object):
                 raise ValueError("Cancelled: FTE config location not chosen.")
         return Options(root=paths["unez"] or paths["fte"], player_name=name,
                        look=self.var_look.get(), binds=binds, configs_only=configs_only,
-                       mods=None, mod_binds=mod_binds, platform=self.platform,
-                       existing=True, unez_path=paths["unez"], fte_path=paths["fte"],
+                       mods=self._selected_mods(), mod_binds=mod_binds,
+                       platform=self.platform, existing=True, unez_path=paths["unez"], fte_path=paths["fte"],
                        fte_cfg_dir=fte_cfg)
 
     # ---------------------------------------------------------- updates
@@ -1781,7 +1923,7 @@ class InstallerApp(object):
         self._log("=" * 60)
         self._log("Starting %s..." % ("config update" if configs_only else
                                       "mods-only install (your clients are not changed)"
-                                      if opts.existing else "install (engines + all mods)"))
+                                      if opts.existing else "install (selected clients and mods)"))
         self.worker = threading.Thread(target=self._worker, args=(opts,), daemon=True)
         self.worker.start()
 

@@ -20,7 +20,7 @@ Based Quake Installer is a small program with a simple window that gets you from
 - downloads **FTE** (the newest official build from <https://www.fteqw.org/>) and installs it in a **separate** folder,
 - gets the official Quake **shareware** data (`id1/pak0.pak`), checks it, and puts a copy into **both** clients,
 - writes a config file for each client with your **player name**, your **look** (software-style or smooth OpenGL) and your **key binds**, and makes every mod folder use it too,
-- installs **all of the included mods** automatically from the USDQC Google Drive (Team Fortress, CTF, Rocket Arena and more, listed in Chapter 4), checking each download's **sha256** fingerprint,
+- installs **the mods you pick** (all of them unless you untick some) from the USDQC Google Drive (Team Fortress, CTF, Rocket Arena and more, listed in Chapter 4), checking each download's **sha256** fingerprint,
 - sets up unezQuake's **server browser** with a list of live master servers (`sb/sources.txt`), and
 - can later **check for updates** and replace only what has changed.
 
@@ -110,7 +110,7 @@ You can change it in the window before you click Install.
 
 ![The main window (Custom binds tab with the Default preset filled in on first run).](img/main-window.png)
 
-The window is laid out from top to bottom in the order you'll use it: where to install, who you are and how it should look, your keys, and then the buttons and progress area. On the right, a panel lists the mods that come along.
+The window is laid out from top to bottom in the order you'll use it: where to install, who you are and how it should look, your keys, and then the buttons and progress area. On the right, the **What to install** panel is where you pick the clients and mods.
 
 ## 3.1 Install folder
 
@@ -210,15 +210,23 @@ Headhunters and Future vs Fantasy don't have tabs: Headhunters' docs don't list 
 
 ![Mod binds tab with Rune Quake selected.](img/mod-binds-rune.png)
 
-## 3.5 Included mods panel
+## 3.5 What to install
 
-The panel on the right just shows the mods that will be installed. There are no tick boxes: **every mod is always installed** with the engines. Mods marked **(FTE)** go into the FTE folder only. All the others go into both clients.
+The panel on the right is where you choose what gets installed.
+
+**Clients.** Tick **unezQuake**, **FTE**, or both. These are the same ticks as the engine boxes in Settings, so changing one changes the other. You need at least one client; if both are unticked, Install tells you to pick one. In Mods-only mode the ticks are greyed out, because the client folders you pick at the top decide which clients get mods.
+
+**Mods.** Every mod has a tick box, and they are all ticked to start with. Untick any you don't want, or use **Select all** and **Select none**. You can untick every mod and install just the clients. Mods that run in only one client say so, for example **AirQuake (FTE only)** or **Spray pack (unezQuake only)**. If that client isn't ticked, the mod is greyed out with a short note (**needs FTE**) and is skipped; it is never put into the other client instead. A mod that runs in both clients goes into whichever of them you picked. The line under the list tells you how many mods will be installed.
+
+Your picks are remembered for next time. **Check for updates** only looks at mods you actually have installed, so a mod you left unticked never shows up as an update. To add it later, tick it and click **Install** again.
+
+![The What to install panel with FTE unticked: FTE-only mods are greyed out](img/pick-fte-only-disabled.png)
 
 ## 3.6 The buttons
 
 | Button | What it does |
 |---|---|
-| **Install** | The full job: downloads the selected engines, the shareware data and all mods, then writes all config files and FTE's `default.fmf`. It's safe to run again on an existing install. |
+| **Install** | The full job: downloads the clients you ticked, the shareware data and the mods you ticked, then writes all config files and FTE's `default.fmf`. It's safe to run again on an existing install. |
 | **Update configs only** | Downloads nothing. It rewrites `id1/based.cfg` and the `autoexec.cfg` files (name, look, binds), every mod folder's `autoexec.cfg` and `binds.cfg`, and checks `default.fmf`. Use it after changing your keys or name. You need a finished install first. |
 | **Check for updates** | Looks online for newer client builds or changed mods (via `mods.json` on Google Drive) and shows a list. From that list, **Update** downloads only what changed. See Chapter 7. |
 | **Update installer** | Checks for a newer version of this installer program and offers to update it. Games, mods and configs aren't touched. See 7.1. |
@@ -236,7 +244,7 @@ Already have unezQuake and/or FTE installed? Choose **Mods-only mode** and pick 
 
 Click the **cog** in the top-right corner (or press **Ctrl+,**).
 
-**Engines (full install).** Tick **unezQuake**, **FTE**, or both. Only ticked engines are downloaded, updated, given `pak0.pak`, configs and mods. To use the usual layout, leave the folder boxes empty: unezQuake and FTE each go in their own folder under your install folder (`unezQuake` and `FTE`). Or pick a different folder for either one — for example unezQuake inside your ezquake folder and FTE somewhere else. The two clients must stay in separate folders, not the install folder itself, and not inside each other. If you already have unezQuake or FTE, point its box at that folder: the installer updates the client and installs the mods there, and keeps your own cfg files. Unticked engines are not downloaded, updated, or given mods. Mods-only mode ignores this section and uses the folders you type on the main window.
+**Engines (full install).** Tick **unezQuake**, **FTE**, or both (the same ticks as **Clients** on the main window). Only ticked engines are downloaded, updated, given `pak0.pak`, configs and mods. To use the usual layout, leave the folder boxes empty: unezQuake and FTE each go in their own folder under your install folder (`unezQuake` and `FTE`). Or pick a different folder for either one — for example unezQuake inside your ezquake folder and FTE somewhere else. The two clients must stay in separate folders, not the install folder itself, and not inside each other. If you already have unezQuake or FTE, point its box at that folder: the installer updates the client and installs the mods there, and keeps your own cfg files. Unticked engines are not downloaded, updated, or given mods. Mods-only mode ignores this section and uses the folders you type on the main window.
 
 **Folders.** *Remember install directory and client folders* is on by default. When it is off, the install folder and client folders are not remembered for next time; your name, binds and look still are, and Check for updates still uses the folders recorded from your last install.
 
@@ -260,7 +268,7 @@ A full install runs these seven steps:
 2. Download FTE for this system (skipped if not ticked in Settings)
 3. Get the Quake shareware `pak0.pak`. It's checked against its known size and MD5 fingerprint. If a good copy is already installed, the download is skipped.
 4. Copy `pak0.pak` into the `id1` folder of each selected client
-5. Install all the mods (download each zip from Google Drive, check its sha256, unzip it into each client)
+5. Install the mods you picked (download each zip from Google Drive, check its sha256, unzip it into each client)
 6. Write the configs: `id1/based.cfg` and `autoexec.cfg` for each client, then each mod folder's `autoexec.cfg` and `binds.cfg` (after the mods, so a mod's own autoexec is kept)
 7. Configure FTE (`default.fmf` with disablehomedir) and save the install manifest
 
@@ -616,7 +624,8 @@ For scripting or headless use, `installer_cli.py` (or `BasedQuakeInstaller-cli.e
 | `--weapons` vanilla, modern | older way to choose a preset (combine with `--movement`) | – |
 | `--look` soft, gl | Software look or OpenGL look | `soft` |
 | `--configs-only` | only rewrite the configs (`based.cfg`, `autoexec.cfg`, mod folders) and check FTE `default.fmf` in an existing install | off |
-| `--mods LIST` | comma list of mod keys, or `all` | `all` |
+| `--clients LIST` | which clients to install: `unez`, `fte` or `unez,fte` | `unez,fte` |
+| `--mods LIST` | comma list of mod keys, `all`, or `none` to install just the clients | `all` |
 | `--mods-only` | only (re)install mods into an existing install | off |
 | `--mod-file KEY=PATH` | install a mod's Drive zip you already downloaded (e.g. `fortress=fortress.zip`); still sha256-checked; can be repeated | – |
 | `--check-updates` | just check an existing install and print the status of each component | off |

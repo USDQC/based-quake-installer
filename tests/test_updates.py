@@ -78,6 +78,7 @@ class CheckTests(unittest.TestCase):
         manifest.record(m, "mod:z", {"file": "z.zip", "size": 100, "version": "1",
                                      "sha256": "aa" * 32})
         manifest.record(m, "mod:old", {"steps": [{"file": "o.zip", "size": 1}]})
+        manifest.record(m, "mod:y", {"file": "y.zip", "version": "1", "sha256": "dd" * 32})
         manifest.save(self.tmp, m)
         specs = [
             {"key": "x", "title": "X", "gamedir": "x", "clients": ["fte"], "version": "1",
@@ -291,6 +292,10 @@ class EngineFilterTests(unittest.TestCase):
              "clients": ["fte", "unez"], "version": "1",
              "url": "https://drive.google.com/file/d/p/view", "sha256": "bb" * 32},
         ]
+        m = manifest.empty("windows")
+        for k in ("fvf", "painkeep"):
+            manifest.record(m, "mod:" + k, {"version": "0", "sha256": "00" * 32})
+        manifest.save(self.tmp, m)
         items = self._check(self._opts(install_fte=False), specs)
         comps = [i.component for i in items]
         self.assertNotIn("mod:fvf", comps)
@@ -372,3 +377,34 @@ class SummaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotInstalledModsTests(unittest.TestCase):
+    """Mods the user left unticked are never offered as updates."""
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_only_installed_mods_are_listed(self):
+        m = manifest.empty("windows")
+        manifest.record(m, "mod:a", {"version": "1", "sha256": "aa" * 32})
+        manifest.save(self.tmp, m)
+        os.makedirs(os.path.join(self.tmp, "FTE", "c", "maps"))  # on disk, no record
+        with open(os.path.join(self.tmp, "FTE", "c", "maps", "m.bsp"), "wb") as fh:
+            fh.write(b"x")
+        url = "https://drive.google.com/file/d/q/view"
+        specs = [{"key": k, "title": k, "gamedir": k, "clients": ["fte"], "version": "2",
+                  "url": url, "sha256": "bb" * 32} for k in ("a", "b", "c")]
+        opts = installer.Options(self.tmp, "p", "soft", platform="windows",
+                                 install_unez=False)
+        items = updater.check_updates(
+            self.tmp, "windows", specs=specs, log=lambda *a: None, opts=opts,
+            resolve_fte=lambda p: {"version": "1.0", "url": "f"})
+        st = {i.component: i.status for i in items}
+        self.assertEqual(st["mod:a"], manifest.STATUS_OUTDATED)
+        self.assertNotIn("mod:b", st)        # never installed: not an update
+        self.assertIn("mod:c", st)           # present on disk counts as installed
+        self.assertFalse(any(i.status == manifest.STATUS_MISSING
+                             for i in items if i.component.startswith("mod:")))

@@ -129,7 +129,7 @@ class InstallLayoutTests(unittest.TestCase):
         o = Options(self.tmp, "p", "soft", mods=None)
         self.assertEqual(resolve_mod_keys(o), all_mod_keys())
         o2 = Options(self.tmp, "p", "soft", mods=[])
-        self.assertEqual(resolve_mod_keys(o2), all_mod_keys())
+        self.assertEqual(resolve_mod_keys(o2), [])  # explicit empty pick = clients only
         o3 = Options(self.tmp, "p", "soft", mods=["fortress"])
         self.assertEqual(resolve_mod_keys(o3), ["fortress"])
 

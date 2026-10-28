@@ -15,7 +15,7 @@ from quake_installer.mods import load_specs
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Based Quake Installer (no GUI). Installs engines + all mods together.")
+        description="Based Quake Installer (no GUI). Installs unezQuake and/or FTE plus the mods you pick (all by default).")
     ap.add_argument("--version", action="version", version="Based Quake Installer %s" % __version__)
     ap.add_argument("--self-test", action="store_true",
                     help="check that the program and its bundled tools start, then exit")
@@ -34,7 +34,9 @@ def main(argv=None):
     ap.add_argument("--configs-only", action="store_true",
                     help="only rewrite autoexec.cfg (+ FTE default.fmf) in an existing install")
     ap.add_argument("--mods", default="all",
-                    help="comma list of mod keys or 'all' (default: all configured mods)")
+                    help="comma list of mod keys, 'all' (default) or 'none' for clients only")
+    ap.add_argument("--clients", default="unez,fte",
+                    help="which clients to install: unez, fte or unez,fte (default: both)")
     ap.add_argument("--mods-only", action="store_true",
                     help="only install mods into an existing install (default: all mods)")
     ap.add_argument("--mod-file", action="append", default=[], metavar="KEY=PATH",
@@ -51,8 +53,14 @@ def main(argv=None):
     if not folders.is_full_path(root):
         ap.error("--root must be a full path, e.g. C:\\Games")
     keys = [m["key"] for m in load_specs()]
+    clients = {c.strip().lower() for c in a.clients.split(",") if c.strip()}
+    bad = clients - {"unez", "fte"}
+    if bad or not clients:
+        ap.error("--clients takes unez, fte or unez,fte (got %r)" % a.clients)
     if a.mods.strip().lower() in ("", "all"):
         mods = keys
+    elif a.mods.strip().lower() == "none":
+        mods = []
     else:
         mods = [k.strip() for k in a.mods.split(",") if k.strip()]
     for k in mods:
@@ -79,7 +87,8 @@ def main(argv=None):
     opts = Options(root, a.name, a.look, binds=binds,
                    write_bats=False, configs_only=a.configs_only,
                    mods=mods, mod_files=mod_files, mods_only=a.mods_only,
-                   platform=host_platform())
+                   platform=host_platform(),
+                   install_unez="unez" in clients, install_fte="fte" in clients)
     if a.check_updates or a.update:
         from quake_installer import updater
         from quake_installer.installer import Reporter

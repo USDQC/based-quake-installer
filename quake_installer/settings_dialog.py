@@ -20,8 +20,10 @@ class SettingsDialog(object):
         win.title("Settings")
         win.transient(app.root)
         win.bind("<Escape>", lambda _e: win.destroy())
-        self.v_unez = tk.BooleanVar(value=app.var_install_unez.get())
-        self.v_fte = tk.BooleanVar(value=app.var_install_fte.get())
+        # CH - The engine ticks ARE the main window's Clients ticks (same variables),
+        # so the two places can never disagree.
+        self.v_unez = app.var_install_unez
+        self.v_fte = app.var_install_fte
         self.v_unez_path = tk.StringVar(value=app.var_unez_target.get())
         self.v_fte_path = tk.StringVar(value=app.var_fte_target.get())
         self.v_remember = tk.BooleanVar(value=app.var_remember_dirs.get())
@@ -46,6 +48,9 @@ class SettingsDialog(object):
         self._build_appearance(inner)
         self._build_updates(inner)
         self._build_footer(frm)
+        self._traces = [(v, v.trace_add("write", lambda *_a: self._on_engine_var()))
+                        for v in (self.v_unez, self.v_fte)]
+        win.bind("<Destroy>", self._drop_traces, add="+")
         self._sync()
         from .gui import center_window
         center_window(win, app.root)
@@ -81,7 +86,8 @@ class SettingsDialog(object):
                        "each other. If you already have unezQuake or FTE, point its box at "
                        "that folder: the installer updates the client and installs the "
                        "mods there, and keeps your own cfg files. Unticked engines are "
-                       "not downloaded, updated, or given mods."
+                       "not downloaded, updated, or given mods. These are the same as the "
+                       "Clients ticks on the main screen."
                   ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(4, 0))
 
     def _build_folders(self, inner):
@@ -143,6 +149,20 @@ class SettingsDialog(object):
         self.hint_u.set("-> " + self._effective(self.v_unez_path, UNEZ_DIRNAME))
         self.hint_f.set("-> " + self._effective(self.v_fte_path, FTE_DIRNAME))
 
+    def _on_engine_var(self):
+        if self.win.winfo_exists():
+            self._sync()
+
+    def _drop_traces(self, event):
+        if event.widget is not self.win:
+            return
+        for v, tid in getattr(self, "_traces", []):
+            try:
+                v.trace_remove("write", tid)
+            except Exception:
+                pass
+        self._traces = []
+
     def _sync(self):
         for on, ent, btn in ((self.v_unez, self.ent_u, self.btn_u),
                              (self.v_fte, self.ent_f, self.btn_f)):
@@ -198,8 +218,6 @@ class SettingsDialog(object):
             return
         app = self.app
         u, f = checked
-        app.var_install_unez.set(self.v_unez.get())
-        app.var_install_fte.set(self.v_fte.get())
         app.var_unez_target.set(u)
         app.var_fte_target.set(f)
         app.var_remember_dirs.set(self.v_remember.get())

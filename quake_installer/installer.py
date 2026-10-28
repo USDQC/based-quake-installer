@@ -326,8 +326,8 @@ def all_mod_keys():
 
 
 def resolve_mod_keys(opts):
-    """Always install every configured mod unless CLI passed an explicit non-empty subset."""
-    if not opts.mods:
+    """None = every configured mod; a list (possibly empty) = exactly those mods."""
+    if opts.mods is None:
         return all_mod_keys()
     return list(opts.mods)
 
@@ -342,7 +342,7 @@ def run_install(opts, rep=None, cancel_event=None):
         raise InstallError("Please choose an install folder.")
     opts.root = root
     if not opts.uses_unez and not opts.uses_fte:
-        raise InstallError("Choose at least one engine to install (Settings).")
+        raise InstallError("Choose at least one client to install (unezQuake or FTE).")
     opts.use_manifest_dirs()
     opts.check_folders()
 
@@ -540,7 +540,7 @@ def install_mods(opts, rep, result, work, cancel_event=None, man=None):
     protect = EXISTING_PROTECTED if opts.existing else PROTECTED_FILES
     keys = resolve_mod_keys(opts)
     if not keys:
-        rep.log("  no mods configured")
+        rep.log("  no mods selected (clients only)")
         return
     online, _err = modlib.load_specs_online(log=rep.log)
     specs = {m["key"]: m for m in online}

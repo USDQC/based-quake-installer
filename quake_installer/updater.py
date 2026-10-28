@@ -265,11 +265,14 @@ def check_updates(root, platform, specs=None, log=print, head=download.head,
             continue  # server-side mod: nothing downloaded, nothing to update
         comp = "mod:" + spec["key"]
         log("  checking mod %s" % spec["title"])
-        remote = {"error": "mods.json: " + index_err} if index_err else _remote_mod(spec)
         inst = comps.get(comp)
+        if inst is None and not _mod_present(root, spec, opts):
+            # CH - Not installed (the user left it unticked): not an "update".
+            continue
+        remote = {"error": "mods.json: " + index_err} if index_err else _remote_mod(spec)
         if remote.get("error"):
             st = manifest.STATUS_ERROR
-        elif inst is None and not _mod_present(root, spec, opts):
+        elif inst is None and not _mod_present(root, spec, opts):  # pragma: no cover
             st = manifest.STATUS_MISSING
         else:
             st = manifest.compare(inst or {}, remote)
