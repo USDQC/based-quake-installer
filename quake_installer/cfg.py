@@ -239,7 +239,9 @@ m_pitch 0.022
 SPRAY_IMAGE = "usdqc"  # qw/sprays/usdqc.png from the spray pack
 
 CLIENT_BASE = {
-    "fte": "mlook_enabled 1",
+    # cl_yieldcpu 1 (FTE default) sleeps between frames; Windows sleep granularity
+    # then caps uncapped-looking values like cl_maxfps 308 near ~120 fps.
+    "fte": "mlook_enabled 1\ncl_yieldcpu 0",
     # sb/sources.txt is written by sb_sources.write_sources(); ezQuake only auto-ticks
     # "id limbo"/"Global"/"QuakeServers.net"/"Asgaard", so tick every source we ship.
     # Sources load before configs run, so these work from based.cfg.
