@@ -325,6 +325,43 @@ def merge_mod_autoexec(gamedir_path, extra_dirs=()):
     return path
 
 
+# Extra lines a mod needs in one client's gamedir autoexec, kept idempotent.
+# Thunderwalker on unezQuake: mtu 1300 stops the hang at "Checking models" on FTE
+# servers, and the TW progs stuffcmd setinfo (team/skin/colors), which unezQuake
+# blocks unless it is in cl_remote_capabilities (default list + setinfo).
+_TW_CAPS = ("+attack,-attack,alias,bf,changing,cmd,color,download,exec,fullserverinfo,"
+            "impulse,infoset,ktx_infoset,ktx_sinfoset,nextul,on_admin,on_connect,"
+            "on_connect_ctf,on_connect_ffa,on_enter,on_enter_ctf,on_enter_ffa,on_matchend,"
+            "on_matchstart,on_observe,on_observe_ctf,on_observe_ffa,on_spec_enter,"
+            "on_spec_enter_ctf,on_spec_enter_ffa,on_spec_matchend,on_spec_matchstart,"
+            "on_unadmin,packet,play,rate,reconnect,say,sinfoset,skin,skins,team,tempalias,"
+            "track,wait,setinfo")
+MOD_CLIENT_LINES = {
+    ("thunderwalker", "unezQuake"): [
+        "// Based Quake Installer: Thunderwalker settings for unezQuake",
+        "mtu 1300",
+        'cl_remote_capabilities "%s"' % _TW_CAPS,
+    ],
+}
+
+
+def add_mod_client_lines(autoexec_path, key, client):
+    """Insert MOD_CLIENT_LINES[(key, client)] before the mod binds line. Idempotent."""
+    want = MOD_CLIENT_LINES.get((key, client))
+    if not want:
+        return False
+    with open(autoexec_path, "r", encoding="utf-8", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
+    drop = {w.split()[0].lower() for w in want if not w.startswith("//")}
+    lines = [l for l in lines if l.strip() != want[0]
+             and not (l.strip() and l.split()[0].lower() in drop)]
+    i = lines.index(_BOTTOM) if _BOTTOM in lines else len(lines)
+    lines[i:i] = want + [""]
+    with open(autoexec_path, "w", encoding="utf-8", newline="") as fh:
+        fh.write("\n".join(lines).replace("\n", "\r\n"))
+    return True
+
+
 # --- Server-driven gamedir switch (e.g. joining a Thunderwalker server from base) ---
 # FTE only re-runs its startup configs on a gamedir change when quake.rc, hexen.rc,
 # default.cfg or server.cfg now resolve from a different place (fteqw fs.c
