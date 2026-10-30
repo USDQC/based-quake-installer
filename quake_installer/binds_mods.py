@@ -335,7 +335,7 @@ _TW_CAPS = ("+attack,-attack,alias,bf,changing,cmd,color,download,exec,fullserve
             "on_matchstart,on_observe,on_observe_ctf,on_observe_ffa,on_spec_enter,"
             "on_spec_enter_ctf,on_spec_enter_ffa,on_spec_matchend,on_spec_matchstart,"
             "on_unadmin,packet,play,rate,reconnect,say,sinfoset,skin,skins,team,tempalias,"
-            "track,wait,setinfo")
+            "track,wait,setinfo,topcolor,bottomcolor")
 MOD_CLIENT_LINES = {
     ("thunderwalker", "unezQuake"): [
         "// Based Quake Installer: Thunderwalker settings for unezQuake",
