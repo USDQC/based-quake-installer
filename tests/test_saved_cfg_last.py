@@ -45,3 +45,9 @@ def test_hh_impulses_last_both_clients(tmp_path):
 def test_other_mods_no_impulse_binds(tmp_path):
     t = _build(str(tmp_path), "ctf", "FTE")
     assert "impulse" not in t
+
+
+def test_unez_base_sets_cfg_use_gamedir():
+    from quake_installer import cfg
+    assert "cfg_use_gamedir 1" in cfg.CLIENT_BASE["unez"].split("\n")
+    assert "cfg_use_gamedir" not in cfg.CLIENT_BASE["fte"]

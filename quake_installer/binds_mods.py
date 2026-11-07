@@ -366,9 +366,10 @@ def add_mod_client_lines(autoexec_path, key, client):
 # Each mod autoexec runs the player's own cfg_save output for that client, so
 # settings saved inside a mod win over id1/based.cfg.
 # FTE: cfg_save writes <gamedir>/fte.cfg (cfg_save_name "fte"), no unbindall, so it
-# goes after binds.cfg. unezQuake: cfg_save writes configs/config.cfg (in the mod
-# folder with cfg_use_gamedir 1, else ezquake/configs/) and that file starts with
-# unbindall, so it goes before binds.cfg to keep the mod binds. A missing file only
+# goes after binds.cfg. unezQuake: based.cfg sets cfg_use_gamedir 1, so cfg_save
+# writes <mod>/configs/config.cfg; exec searches the gamedir first, so this exec
+# picks up the mod's file (falling back to ezquake/configs/config.cfg if the mod has
+# none yet). That file starts with unbindall, so it goes before binds.cfg. A missing file only
 # prints "couldn't exec".
 _SAVED_MARK = "// Based Quake Installer: your saved settings for this mod (cfg_save)"
 SAVED_CFG = {"FTE": "exec fte.cfg", "unezQuake": "exec configs/config.cfg"}

@@ -246,7 +246,11 @@ CLIENT_BASE = {
     # "id limbo"/"Global"/"QuakeServers.net"/"Asgaard", so tick every source we ship.
     # Sources load before configs run, so these work from based.cfg.
     # crosshair: unezQuake's default is 4; 1 is the classic "+".
-    "unez": "freelook 1\ncrosshair 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
+    # cfg_use_gamedir 1 (config_manager.c Cfg_GetConfigPath): cfg_save inside a mod
+    # writes <mod>/configs/config.cfg instead of the shared ezquake/configs/config.cfg.
+    # Startup cfg_load runs while the gamedir is still qw, so the main config still
+    # comes from ezquake/configs/config.cfg.
+    "unez": "freelook 1\ncrosshair 1\ncfg_use_gamedir 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
             + "\n".join(sb_sources.sourcemark_lines())
             # Sprays (unezQuake 2.1.1 cl_sprays.c): images load from qw/sprays
             # (cl_spray_image_path); cl_spray_image defaults to "spray", which the spray
