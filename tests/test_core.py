@@ -231,9 +231,10 @@ class ModTests(unittest.TestCase):
                                unez_dir=unez)
         self.assertTrue(src.startswith("binds only"))
         # + the server-switch hook: quake.rc (FTE) / frontend.cfg (unezQuake)
-        for t, hook in ((fte, "quake.rc"), (unez, "frontend.cfg")):
+        # unezQuake also gets config.cfg (cfg_legacy_exec runs it on a gamedir switch)
+        for t, hooks in ((fte, ["quake.rc"]), (unez, ["config.cfg", "frontend.cfg"])):
             d = os.path.join(t, "runequake")
-            self.assertEqual(sorted(os.listdir(d)), ["autoexec.cfg", "binds.cfg", hook])
+            self.assertEqual(sorted(os.listdir(d)), sorted(["autoexec.cfg", "binds.cfg"] + hooks))
             with open(os.path.join(d, "autoexec.cfg")) as fh:
                 self.assertIn("exec binds.cfg", fh.read())
 

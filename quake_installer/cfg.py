@@ -250,7 +250,9 @@ CLIENT_BASE = {
     # writes <mod>/configs/config.cfg instead of the shared ezquake/configs/config.cfg.
     # Startup cfg_load runs while the gamedir is still qw, so the main config still
     # comes from ezquake/configs/config.cfg.
-    "unez": "freelook 1\ncrosshair 1\ncfg_use_gamedir 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
+    # cfg_legacy_exec 1 (cl_parse.c CL_ParseServerData): when a server switches the
+    # gamedir, run <mod>/config.cfg, which the installer points at autoexec.cfg.
+    "unez": "freelook 1\ncrosshair 1\ncfg_use_gamedir 1\ncfg_legacy_exec 1\n\n// === server browser: tick the installer's sources (sb/sources.txt) ===\n"
             + "\n".join(sb_sources.sourcemark_lines())
             # Sprays (unezQuake 2.1.1 cl_sprays.c): images load from qw/sprays
             # (cl_spray_image_path); cl_spray_image defaults to "spray", which the spray

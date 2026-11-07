@@ -290,6 +290,8 @@ def _install_binds_only(spec, targets, log):
                 fh.write(text)
         binds_mods.merge_mod_autoexec(target)
         binds_mods.ensure_switch_hook(target, label)
+        if label == "unezQuake":
+            binds_mods.ensure_unez_config_cfg(target)
         log("  OK: %s -> %s (%s, binds only; server-side mod)" % (spec["title"], target, label))
     return "binds only (server-side mod)"
 

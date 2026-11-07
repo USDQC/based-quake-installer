@@ -536,6 +536,49 @@ def ensure_switch_hook(gamedir_path, client, extra_dirs=()):
     return None
 
 
+UNEZ_CONFIG_LINE = "exec autoexec.cfg"
+UNEZ_CONFIG_COMMENT = "// Based Quake Installer: unezQuake runs this on a server gamedir switch (cfg_legacy_exec)"
+
+
+def ensure_unez_config_cfg(gamedir_path):
+    """unezQuake only: make <mod>/config.cfg (mod root, not configs/) run autoexec.cfg.
+
+    With cfg_legacy_exec 1, unezQuake execs <mod>/config.cfg when a server switches
+    it into the mod. A mod-shipped config.cfg (any case) is kept and the line is
+    appended once. Any root-config exec in the mod's autoexec.cfg is commented out
+    so the two can't recurse. Idempotent. Returns the path, or None.
+    """
+    import os
+    if not os.path.isdir(gamedir_path):
+        return None
+    names = _find_ci(gamedir_path, "config.cfg")
+    path = os.path.join(gamedir_path, names[0] if names else "config.cfg")
+    old = ""
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            old = fh.read()
+    if not any(l.strip().lower() == UNEZ_CONFIG_LINE for l in old.splitlines()):
+        with open(path, "a", encoding="utf-8", newline="") as fh:
+            fh.write(("" if old.endswith("\n") or not old else "\r\n") +
+                     UNEZ_CONFIG_COMMENT + "\r\n" + UNEZ_CONFIG_LINE + "\r\n")
+    for n in _find_ci(gamedir_path, "autoexec.cfg"):
+        ap = os.path.join(gamedir_path, n)
+        with open(ap, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        lines = text.splitlines(True)
+        changed = False
+        for i, l in enumerate(lines):
+            parts = l.strip().rstrip(";").split()
+            if len(parts) == 2 and parts[0].lower() == "exec" and \
+                    parts[1].strip('"').lower() in ("config.cfg", "./config.cfg"):
+                lines[i] = "// (disabled by Based Quake Installer: config.cfg runs autoexec.cfg) " + l
+                changed = True
+        if changed:
+            with open(ap, "w", encoding="utf-8", newline="") as fh:
+                fh.write("".join(lines))
+    return path
+
+
 def ensure_autoexec_execs_binds(autoexec_path, text_if_new=None):
     """Back-compat wrapper: merge the gamedir autoexec. True if exec line was added."""
     import os

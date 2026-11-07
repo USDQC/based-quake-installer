@@ -278,6 +278,10 @@ def write_mod_configs(opts, rep, result):
         hook = binds_mods.ensure_switch_hook(target, label, extra_dirs=extra)
         if hook and hook not in result.cfg_files:
             result.cfg_files.append(hook)
+        if label == "unezQuake":
+            legacy = binds_mods.ensure_unez_config_cfg(target)
+            if legacy and legacy not in result.cfg_files:
+                result.cfg_files.append(legacy)
     # unezQuake: going back to a base server re-runs the base autoexec (unbindall).
     if opts.unez_dir and os.path.isdir(opts.unez_dir):
         qw = os.path.join(opts.unez_dir, "qw")
