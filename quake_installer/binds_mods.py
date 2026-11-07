@@ -362,6 +362,60 @@ def add_mod_client_lines(autoexec_path, key, client):
     return True
 
 
+# --- Saved config + Headhunters number keys ---
+# Each mod autoexec runs the player's own cfg_save output for that client, so
+# settings saved inside a mod win over id1/based.cfg.
+# FTE: cfg_save writes <gamedir>/fte.cfg (cfg_save_name "fte"), no unbindall, so it
+# goes after binds.cfg. unezQuake: cfg_save writes configs/config.cfg (in the mod
+# folder with cfg_use_gamedir 1, else ezquake/configs/) and that file starts with
+# unbindall, so it goes before binds.cfg to keep the mod binds. A missing file only
+# prints "couldn't exec".
+_SAVED_MARK = "// Based Quake Installer: your saved settings for this mod (cfg_save)"
+SAVED_CFG = {"FTE": "exec fte.cfg", "unezQuake": "exec configs/config.cfg"}
+_LAST_MARK = "// Based Quake Installer: always last"
+MOD_LAST_LINES = {
+    "hh": ["// Headhunters menu needs impulse 0-9 on the number keys"]
+          + ['bind %d "impulse %d"' % (n, n) for n in (1, 2, 3, 4, 5, 6, 7, 8, 9, 0)],
+}
+
+
+def add_saved_cfg_and_last_lines(autoexec_path, key, client):
+    """Add the saved-config exec and any must-be-last mod lines. Idempotent."""
+    saved = SAVED_CFG.get(client)
+    last = MOD_LAST_LINES.get(key)
+    if not saved and not last:
+        return False
+    with open(autoexec_path, "r", encoding="utf-8", errors="replace") as fh:
+        lines = fh.read().replace("\r\n", "\n").split("\n")
+    # Drop anything we wrote before (block from a marker up to the next blank line).
+    out, skip = [], False
+    for l in lines:
+        if l.strip() in (_SAVED_MARK, _LAST_MARK):
+            skip = True
+            continue
+        if skip:
+            if l.strip() == "":
+                skip = False
+            continue
+        out.append(l)
+    lines = out
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    if saved:
+        block = [_SAVED_MARK, saved, ""]
+        if client == "unezQuake" and _BOTTOM in lines:
+            i = lines.index(_BOTTOM)
+            lines[i:i] = block
+        else:
+            lines += [""] + block[:-1]
+    if last:
+        lines += ["", _LAST_MARK] + last
+    lines.append("")
+    with open(autoexec_path, "w", encoding="utf-8", newline="") as fh:
+        fh.write("\n".join(lines).replace("\n", "\r\n"))
+    return True
+
+
 # --- Server-driven gamedir switch (e.g. joining a Thunderwalker server from base) ---
 # FTE only re-runs its startup configs on a gamedir change when quake.rc, hexen.rc,
 # default.cfg or server.cfg now resolve from a different place (fteqw fs.c

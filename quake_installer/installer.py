@@ -272,6 +272,7 @@ def write_mod_configs(opts, rep, result):
         extra = [data] if data != target else []
         auto = binds_mods.merge_mod_autoexec(target, extra_dirs=extra)
         binds_mods.add_mod_client_lines(auto, key, label)
+        binds_mods.add_saved_cfg_and_last_lines(auto, key, label)
         if auto not in result.cfg_files:
             result.cfg_files.append(auto)
         hook = binds_mods.ensure_switch_hook(target, label, extra_dirs=extra)
